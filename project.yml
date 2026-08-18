@@ -1,0 +1,117 @@
+name: SmartShot
+options:
+  bundleIdPrefix: com.infinityf4p
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: SmartShot Local Development
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+    ENABLE_HARDENED_RUNTIME: YES
+    GENERATE_INFOPLIST_FILE: YES
+targets:
+  SmartShotCore:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/SmartShotCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.infinityf4p.SmartShotCore
+        DEFINES_MODULE: YES
+        MACH_O_TYPE: staticlib
+  SmartShot:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/SmartShotApp
+      - path: Resources/Assets.xcassets
+        buildPhase: resources
+    dependencies:
+      - target: SmartShotCore
+      - target: SmartShotSafariExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.infinityf4p.SmartShot
+        PRODUCT_NAME: SmartShot
+        ENABLE_DEBUG_DYLIB: NO
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Resources/App/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  SmartShotSafariExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Sources/SmartShotSafariExtension
+      - path: BrowserExtension/manifest.json
+        buildPhase: resources
+      - path: BrowserExtension/background.js
+        buildPhase: resources
+      - path: BrowserExtension/content.js
+        buildPhase: resources
+      - path: BrowserExtension/shared
+        type: folder
+        buildPhase: resources
+      - path: BrowserExtension/icons
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - sdk: SafariServices.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.infinityf4p.SmartShot.SafariExtension
+        PRODUCT_NAME: SmartShot Safari Extension
+        PRODUCT_MODULE_NAME: SmartShotSafariExtension
+        ENABLE_DEBUG_DYLIB: NO
+        INFOPLIST_FILE: Resources/SafariExtension/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: SmartShot Safari Extension
+        APPLICATION_EXTENSION_API_ONLY: YES
+        ENABLE_APP_SANDBOX: YES
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS:
+          - $(inherited)
+          - '@executable_path/../Frameworks'
+          - '@executable_path/../../../../Frameworks'
+  SmartShotCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/SmartShotCoreTests
+    dependencies:
+      - target: SmartShotCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.infinityf4p.SmartShotCoreTests
+  SmartShotAppTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/SmartShotAppTests
+      - path: Sources/SmartShotApp/Services/GlobalShortcutMonitor.swift
+      - path: Sources/SmartShotApp/Services/CaptureOcclusionPolicy.swift
+      - path: Sources/SmartShotApp/Overlay/ScrollingSelectionCommit.swift
+      - path: Sources/SmartShotApp/Overlay/CaptureSelectionMode.swift
+      - path: Sources/SmartShotApp/Views/AppSymbols.swift
+    dependencies:
+      - target: SmartShotCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.infinityf4p.SmartShotAppTests
+schemes:
+  SmartShot:
+    build:
+      targets:
+        SmartShot: all
+        SmartShotSafariExtension: all
+        SmartShotCoreTests: [test]
+        SmartShotAppTests: [test]
+    test:
+      targets:
+        - SmartShotCoreTests
+        - SmartShotAppTests

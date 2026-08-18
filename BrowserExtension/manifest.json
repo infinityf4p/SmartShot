@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "SmartShot Web Selector",
+  "version": "0.1.0",
+  "description": "Select semantic web content blocks and capture them locally with SmartShot.",
+  "icons": {
+    "16": "icons/icon_16.png",
+    "32": "icons/icon_32.png",
+    "128": "icons/icon_128.png"
+  },
+  "action": {
+    "default_title": "Select a content block",
+    "default_icon": {
+      "16": "icons/icon_16.png",
+      "32": "icons/icon_32.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "nativeMessaging"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "shared/core.js",
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

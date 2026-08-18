@@ -1,0 +1,13 @@
+.DS_Store
+.build/
+build/
+DerivedData/
+DerivedData*/
+*.xcresult
+*.xcuserstate
+xcuserdata/
+BrowserExtension/node_modules/
+.env
+*.keychain-db
+*.p12
+*.pem
