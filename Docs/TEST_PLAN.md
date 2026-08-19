@@ -20,7 +20,10 @@ The current native unit suite covers:
 - Candidate clipping, minimum size, deduplication, and ordering (`CandidateFilterTests`).
 - Vertical overlap estimation, including changing pixels and seam placement (`VerticalOverlapEstimatorTests`).
 - Vertical fragment layout/stitching and size/error boundaries (`VerticalImageStitcherTests`).
+- Fixed-top detection and fixed-header estimator-to-stitcher placement (`VerticalFixedTopDetectorTests`, `VerticalOverlapEstimatorTests`).
+- Crop mapping, edit history, and pixel rendering for arrows, rectangles, text, mosaic, and numbered markers (`ScreenshotEditingTests`).
 - Unified selector mode order, distinct presentation, and accessible help (`CaptureSelectionModeTests`).
+- Manual scroll-gesture counting and automatic-bottom completion policy (`ManualScrollAttemptTrackerTests`).
 
 The current browser-extension Node suite covers:
 
@@ -39,14 +42,15 @@ The browser DOM whole-block workflow is implemented and its geometry/protocol lo
 
 ### Implemented, Unverified Runtime
 
+The post-capture editor was exercised on 2026-08-19 from a signed Debug build with a deterministic fixture: tool switching, text and numbered-marker placement, undo/redo state, 150% zoom scrolling, and Pin using the edited render were observed. Pixel-level automated tests cover drag-based crop, arrow, rectangle, and mosaic output.
+
 The following native paths exist but still require a recorded real macOS GUI matrix:
 
 - Delivery of the global shortcut while another app is frontmost. A 2026-08-13 launch check confirmed that Carbon registration returned success and the app displayed `Control-Shift-2`; this does not replace the frontmost-app keypress test.
 - Multi-display overlay.
 - AX/window/manual selection.
 - ScreenCaptureKit capture with SmartShot excluded.
-- Read-only preview.
-- Pasteboard copy.
+- Pasteboard copy of edited output.
 - PNG save and save cancellation/failure behavior.
 - Unified Smart/Region/Long toolbar interaction.
 - Manual Long fixed-region sampling, target-app scrolling, finish/cancel HUD, and final pinned preview.
@@ -91,7 +95,7 @@ Safari/X tests below are promotion gates, not current pass results.
 - Verify an atomic save failure leaves the last preview available.
 - Verify cancelling `NSSavePanel` writes no file.
 
-There are no post-capture crop tests because the native app has no post-capture crop feature.
+Automated editor tests verify nested crop coordinate mapping, undo/redo/reset, top-left crop orientation, vector annotation placement, numbered-marker sequencing, and mosaic pixelation. Continue to fuzz zero-area drags, edge-clamped crop rectangles, very large images, and repeated render-cache invalidation.
 
 ### Manual Long Capture
 
@@ -101,9 +105,9 @@ The manual Long path reuses the automated overlap/stitcher coverage, but its Scr
 - Draw a fixed region over a controlled static numbered list, scroll downward by less than one viewport, pause, repeat, and finish. Verify every numbered row appears once and seam error is no more than one pixel.
 - Verify the overlay disappears before scrolling, the pointer and target application remain usable, and the non-activating HUD does not enter any fragment.
 - Verify Done is disabled until at least two accepted sections; Cancel produces no output and removes the HUD.
-- Verify identical frames do not increment the section count.
-- Verify upward scrolling, a jump larger than the available overlap, dynamic pixels, sticky content inside the rectangle, target/window movement, and scale/width changes fail explicitly.
-- Verify 24-section, 75-second, 16,384-pixel-axis, 20,000-logical-point-height, and 32-million-pixel limits.
+- Verify identical frames do not increment the section count; after accepted movement, a new bottom scroll attempt with no new pixels finishes automatically.
+- Verify one stable fixed top strip is present only once in the output. Changing sticky content, upward scrolling, a jump larger than the available overlap, dynamic pixels, target/window movement, and scale/width changes must fail explicitly.
+- Verify 24-section, 5-minute, 16,384-pixel-axis, 20,000-logical-point-height, and 32-million-pixel limits.
 - Verify manual scrolling is not claimed to restore the target position.
 - On a public X long post, select only the center content column, scroll in small steps, and inspect every seam. Record this as a manual region result, not automatic semantic whole-post recognition.
 
@@ -170,7 +174,8 @@ For each available display, capture a high-contrast block near each edge and at 
 
 - Capture small, large, wide, and tall regions.
 - Confirm preview aspect-fit does not change output resolution.
-- Confirm the preview has Pin, Copy, and Save actions; there must be no claim of crop editing.
+- Exercise crop, arrow, rectangle, text, mosaic, and numbered-marker tools; verify undo/redo, reset, color, line width, and 100%-400% zoom.
+- Confirm Copy, Pin, and Save use the current edited render while a reset returns to the original pixels.
 - Pin a normal and a tall capture. Verify the non-activating panel stays above other windows, joins another Space, scrolls tall content, closes cleanly, and is excluded from later captures.
 - Set delay to Off, 3 seconds, and 5 seconds. Verify the countdown appears after selection, does not intercept the mouse, is excluded from the screenshot, and cancellation/termination removes it.
 - Copy into Preview and Notes and confirm image compatibility.
@@ -268,7 +273,7 @@ Use controlled static fixtures for seam correctness and X only for a non-sensiti
 Before calling the native app runtime-verified:
 
 - Complete the relevant display and permission matrix.
-- Verify AX/window/manual capture, preview, copy, and PNG save from the built artifact.
+- Verify AX/window/manual capture, post-capture editing, copy, pin, and PNG save from the built artifact.
 - Confirm no stuck overlay, wrong-display crop, or captured SmartShot UI.
 - Record exact hardware and macOS version.
 
@@ -285,7 +290,7 @@ Do not call Safari browser-local X-post capture GUI-verified until real Safari +
 
 ### Exclusion Claim
 
-Every release description must distinguish the two bounded long-capture implementations from general-purpose long screenshots. It must state that dynamic/infinite/virtualized/nested/cross-display capture is not promised and that recording, OCR, annotation, and post-capture editing are absent.
+Every release description must distinguish the bounded long-capture implementations from general-purpose long screenshots. It must state that dynamic/infinite/virtualized/nested/cross-display capture is not promised, that crop/basic annotation editing is present, and that recording, OCR, history, object removal, and semantic redaction are absent.
 
 ## Test Record Template
 

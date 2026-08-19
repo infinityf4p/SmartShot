@@ -9,7 +9,7 @@ struct SmartShotApp: App {
     var body: some Scene {
         Window("SmartShot", id: "main") {
             MainView(model: model)
-                .frame(minWidth: 720, minHeight: 500)
+                .frame(minWidth: 820, minHeight: 560)
                 .onAppear {
                     applicationDelegate.installTerminationHandler {
                         model.applicationShouldTerminate()

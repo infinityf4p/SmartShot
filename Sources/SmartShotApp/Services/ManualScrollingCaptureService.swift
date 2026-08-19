@@ -72,9 +72,51 @@ struct ManualScrollingCaptureProgress: Equatable, Sendable {
 @MainActor
 final class ManualScrollingCaptureControl {
     private(set) var finishRequested = false
+    private(set) var scrollAttemptCount = 0
+    private var scrollTracker: ManualScrollAttemptTracker?
+    private var scrollMonitor: Any?
 
     func finish() {
         finishRequested = true
+    }
+
+    func beginMonitoringScrollAttempts(in captureRect: CGRect) {
+        endMonitoringScrollAttempts()
+        finishRequested = false
+        scrollAttemptCount = 0
+        scrollTracker = ManualScrollAttemptTracker(captureRect: captureRect)
+        scrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            let phase = event.phase
+            let sample = ManualScrollEventSample(
+                location: NSEvent.mouseLocation,
+                verticalDelta: event.scrollingDeltaY,
+                horizontalDelta: event.scrollingDeltaX,
+                phaseBegan: phase.contains(.began),
+                phaseChanged: phase.contains(.changed),
+                phaseEnded: phase.contains(.ended) || phase.contains(.cancelled),
+                hasMomentum: !event.momentumPhase.isEmpty,
+                timestamp: event.timestamp
+            )
+            Task { @MainActor [weak self] in
+                self?.recordScrollAttempt(sample)
+            }
+        }
+    }
+
+    func endMonitoringScrollAttempts() {
+        if let scrollMonitor {
+            NSEvent.removeMonitor(scrollMonitor)
+        }
+        scrollMonitor = nil
+        scrollTracker = nil
+    }
+
+    private func recordScrollAttempt(_ sample: ManualScrollEventSample) {
+        guard var scrollTracker else { return }
+        if scrollTracker.observe(sample) {
+            scrollAttemptCount = scrollTracker.attemptCount
+        }
+        self.scrollTracker = scrollTracker
     }
 }
 
@@ -94,6 +136,8 @@ struct ManualScrollingCaptureService {
     ) async throws -> CapturedImage {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: configuration.maximumDuration)
+        control.beginMonitoringScrollAttempts(in: rect)
+        defer { control.endMonitoringScrollAttempts() }
         progress(
             makeProgress(
                 phase: .preparing,
@@ -124,6 +168,8 @@ struct ManualScrollingCaptureService {
             ),
         ]
         var cumulativeScrollPixels = 0
+        var fixedTopHeightPixels: Int?
+        var acceptedScrollAttemptCount = control.scrollAttemptCount
         var stitchedPixelHeight = firstFrame.image.height
         progress(
             makeProgress(
@@ -148,17 +194,41 @@ struct ManualScrollingCaptureService {
             }
 
             let estimate: VerticalOverlapEstimate?
+            var reachedBottom = false
             if try await framesAreVisuallyEquivalent(
                 previousFrame.image,
                 currentFrame.image
             ) {
                 estimate = nil
+                reachedBottom = ManualLongCaptureCompletionPolicy.shouldAutomaticallyFinish(
+                    framesAreEquivalent: true,
+                    fragmentCount: fragments.count,
+                    acceptedScrollAttemptCount: acceptedScrollAttemptCount,
+                    currentScrollAttemptCount: control.scrollAttemptCount
+                )
             } else {
                 do {
-                    estimate = try await estimateOverlap(
-                        previous: previousFrame.image,
-                        current: currentFrame.image
-                    )
+                    if fixedTopHeightPixels == nil {
+                        fixedTopHeightPixels = try await detectFixedTop(
+                            previous: previousFrame.image,
+                            current: currentFrame.image
+                        )
+                    }
+                    let fixedTop = fixedTopHeightPixels ?? 0
+                    do {
+                        estimate = try await estimateOverlap(
+                            previous: previousFrame.image,
+                            current: currentFrame.image,
+                            fixedTopHeightPixels: fixedTop
+                        )
+                    } catch VerticalOverlapEstimationError.noReliableOverlap where fixedTop > 0 {
+                        fixedTopHeightPixels = 0
+                        estimate = try await estimateOverlap(
+                            previous: previousFrame.image,
+                            current: currentFrame.image,
+                            fixedTopHeightPixels: 0
+                        )
+                    }
                 } catch VerticalOverlapEstimationError.identicalImages {
                     estimate = nil
                 } catch VerticalOverlapEstimationError.noReliableOverlap {
@@ -197,12 +267,15 @@ struct ManualScrollingCaptureService {
                 fragments.append(
                     VerticalCaptureFragment(
                         image: currentFrame.image,
-                        verticalOffset: CGFloat(cumulativeScrollPixels) / currentFrame.scale,
+                        verticalOffset: CGFloat(
+                            (fixedTopHeightPixels ?? 0) + cumulativeScrollPixels
+                        ) / currentFrame.scale,
                         scale: currentFrame.scale,
                         sourceTopInsetPixels: estimate.currentSourceTopInsetPixels
                     )
                 )
                 previousFrame = currentFrame
+                acceptedScrollAttemptCount = control.scrollAttemptCount
                 progress(
                     makeProgress(
                         phase: .capturing,
@@ -224,7 +297,7 @@ struct ManualScrollingCaptureService {
                 )
             }
 
-            if control.finishRequested {
+            if control.finishRequested || reachedBottom {
                 break
             }
             try await Task.sleep(for: configuration.idlePollDelay)
@@ -258,6 +331,7 @@ struct ManualScrollingCaptureService {
 
         let logicalSize = stitched.layout.logicalSize
         return CapturedImage(
+            cgImage: stitched.image,
             image: NSImage(cgImage: stitched.image, size: logicalSize),
             pngData: stitched.pngData,
             logicalRect: CGRect(origin: preparedCapture.logicalRect.origin, size: logicalSize),
@@ -313,11 +387,13 @@ struct ManualScrollingCaptureService {
 
     private func estimateOverlap(
         previous: CGImage,
-        current: CGImage
+        current: CGImage,
+        fixedTopHeightPixels: Int
     ) async throws -> VerticalOverlapEstimate {
         let previousImage = ManualSendableCGImage(previous)
         let currentImage = ManualSendableCGImage(current)
-        let minimumOverlapHeight = max(24, Int(ceil(Double(previous.height) * 0.68)))
+        let bodyHeight = max(1, previous.height - fixedTopHeightPixels)
+        let minimumOverlapHeight = max(24, Int(ceil(Double(bodyHeight) * 0.68)))
         let estimationTask = Task.detached(priority: .userInitiated) {
             try VerticalOverlapEstimator.estimate(
                 previous: previousImage.value,
@@ -326,7 +402,7 @@ struct ManualScrollingCaptureService {
                     minimumOverlapHeightPixels: minimumOverlapHeight,
                     maximumOverlapFraction: 0.999_999,
                     horizontalInsetFraction: 0.10,
-                    fixedTopHeightPixels: 0,
+                    fixedTopHeightPixels: fixedTopHeightPixels,
                     maximumMeanAbsoluteDifference: 0.075,
                     minimumConfidence: 0.48,
                     maximumSampleRows: 160,
@@ -340,6 +416,22 @@ struct ManualScrollingCaptureService {
             try await estimationTask.value
         } onCancel: {
             estimationTask.cancel()
+        }
+    }
+
+    private func detectFixedTop(previous: CGImage, current: CGImage) async throws -> Int {
+        let previousImage = ManualSendableCGImage(previous)
+        let currentImage = ManualSendableCGImage(current)
+        let detectionTask = Task.detached(priority: .userInitiated) {
+            try VerticalFixedTopDetector.detect(
+                previous: previousImage.value,
+                current: currentImage.value
+            )
+        }
+        return try await withTaskCancellationHandler {
+            try await detectionTask.value
+        } onCancel: {
+            detectionTask.cancel()
         }
     }
 

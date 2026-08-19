@@ -120,6 +120,7 @@ struct ScrollingCaptureService {
         var previousValue = firstValue
         var step = max(minimumStep, range * configuration.initialStepFraction)
         var cumulativeScrollPixels = 0
+        var fixedTopHeightPixels: Int?
         var overlapRetries = 0
         progress(0.04)
 
@@ -157,10 +158,27 @@ struct ScrollingCaptureService {
             }
             let estimate: VerticalOverlapEstimate
             do {
-                estimate = try await estimateOverlap(
-                    previous: previousFrame.image,
-                    current: currentFrame.image
-                )
+                if fixedTopHeightPixels == nil {
+                    fixedTopHeightPixels = try await detectFixedTop(
+                        previous: previousFrame.image,
+                        current: currentFrame.image
+                    )
+                }
+                let fixedTop = fixedTopHeightPixels ?? 0
+                do {
+                    estimate = try await estimateOverlap(
+                        previous: previousFrame.image,
+                        current: currentFrame.image,
+                        fixedTopHeightPixels: fixedTop
+                    )
+                } catch VerticalOverlapEstimationError.noReliableOverlap where fixedTop > 0 {
+                    fixedTopHeightPixels = 0
+                    estimate = try await estimateOverlap(
+                        previous: previousFrame.image,
+                        current: currentFrame.image,
+                        fixedTopHeightPixels: 0
+                    )
+                }
             } catch is CancellationError {
                 throw CancellationError()
             } catch VerticalOverlapEstimationError.identicalImages {
@@ -188,7 +206,9 @@ struct ScrollingCaptureService {
             fragments.append(
                 VerticalCaptureFragment(
                     image: currentFrame.image,
-                    verticalOffset: CGFloat(cumulativeScrollPixels) / currentFrame.scale,
+                    verticalOffset: CGFloat(
+                        (fixedTopHeightPixels ?? 0) + cumulativeScrollPixels
+                    ) / currentFrame.scale,
                     scale: currentFrame.scale,
                     sourceTopInsetPixels: estimate.currentSourceTopInsetPixels
                 )
@@ -220,6 +240,7 @@ struct ScrollingCaptureService {
         try Task.checkCancellation()
         let logicalSize = stitched.layout.logicalSize
         return CapturedImage(
+            cgImage: stitched.image,
             image: NSImage(cgImage: stitched.image, size: logicalSize),
             pngData: stitched.pngData,
             logicalRect: CGRect(origin: target.captureAppKitFrame.origin, size: logicalSize),
@@ -314,7 +335,11 @@ struct ScrollingCaptureService {
         }
     }
 
-    private func estimateOverlap(previous: CGImage, current: CGImage) async throws -> VerticalOverlapEstimate {
+    private func estimateOverlap(
+        previous: CGImage,
+        current: CGImage,
+        fixedTopHeightPixels: Int = 0
+    ) async throws -> VerticalOverlapEstimate {
         let previousImage = SendableCGImage(previous)
         let currentImage = SendableCGImage(current)
         let estimationTask = Task.detached(priority: .userInitiated) {
@@ -325,7 +350,7 @@ struct ScrollingCaptureService {
                     minimumOverlapHeightPixels: 24,
                     maximumOverlapFraction: 0.999_999,
                     horizontalInsetFraction: 0.10,
-                    fixedTopHeightPixels: 0,
+                    fixedTopHeightPixels: fixedTopHeightPixels,
                     maximumMeanAbsoluteDifference: 0.025,
                     minimumConfidence: 0.84,
                     maximumSampleRows: 64,
@@ -338,6 +363,22 @@ struct ScrollingCaptureService {
             try await estimationTask.value
         } onCancel: {
             estimationTask.cancel()
+        }
+    }
+
+    private func detectFixedTop(previous: CGImage, current: CGImage) async throws -> Int {
+        let previousImage = SendableCGImage(previous)
+        let currentImage = SendableCGImage(current)
+        let detectionTask = Task.detached(priority: .userInitiated) {
+            try VerticalFixedTopDetector.detect(
+                previous: previousImage.value,
+                current: currentImage.value
+            )
+        }
+        return try await withTaskCancellationHandler {
+            try await detectionTask.value
+        } onCancel: {
+            detectionTask.cancel()
         }
     }
 

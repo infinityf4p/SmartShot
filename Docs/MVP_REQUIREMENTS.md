@@ -4,7 +4,7 @@
 
 This document separates the implementation snapshot from intended follow-up work.
 
-- **Current**: present in the native app or browser extension as of 2026-08-15.
+- **Current**: present in the native app or browser extension as of 2026-08-19.
 - **Verified**: exercised by the automated or runtime evidence named in `TEST_PLAN.md`.
 - **Experimental**: present, but the relevant end-to-end user path is not verified.
 - **Target**: a requirement for a later milestone, not a current capability.
@@ -19,9 +19,7 @@ The current native workflow is:
 2. Choose Smart, Region, or Long in the same selection overlay.
 3. Point at an Accessibility/window candidate in Smart mode, or drag a rectangle in any mode.
 4. Capture a static region immediately, or manually scroll a fixed Long region while SmartShot accepts seam-verified stable sections.
-5. Preview, copy, pin, or save the original captured PNG.
-
-There is no post-capture crop editor. The selected source rectangle determines the output bounds.
+5. Crop or annotate the result, then copy, pin, or save the rendered PNG.
 
 ## Current Native Scope
 
@@ -56,12 +54,15 @@ If Accessibility permission is denied, window and manual-region capture remain a
 - The selection is clipped to the display containing its center.
 - The output dimensions are derived from the selected region and display backing scale.
 - Captured image preview in the main app.
+- Post-capture crop with reset-to-full-image.
+- Arrow, rectangle, text, mosaic, and numbered-marker annotations.
+- Undo/redo, reset-all, color and line-width controls, and 100%-400% zoom.
 - Copy to the system pasteboard.
 - Pin the latest capture in a local floating window.
 - Save as PNG through the standard save panel using an atomic write.
 - Optional 0, 3, or 5 second delay after selection and before pixel capture.
 
-The preview is read-only. v0.1 does not provide crop handles, crop reset, or any post-capture pixel editing.
+The editor keeps edits in memory. Copy, Pin, and Save render the current crop and annotations at output resolution; preview rendering is independently bounded so a large long screenshot does not require a full-resolution redraw after every edit.
 
 ### Manual Long Capture
 
@@ -70,9 +71,11 @@ The unified **Long** mode is implemented as a bounded, user-driven capture:
 - The user drags one fixed rectangle on a single display. No browser extension or writable AX scrollbar is required.
 - After the selection overlay is removed, the target application remains interactive and the user scrolls downward manually.
 - SmartShot waits for stable frames, verifies vertical pixel overlap, retains only newly revealed rows, and stitches locally.
+- A conservative detector can remove a stable fixed top strip from later fragments so it is not duplicated in the stitched image.
+- After at least one accepted movement, a new scroll attempt that produces an equivalent frame is treated as a bottom signal and finishes automatically; Done remains available as the explicit fallback.
 - A non-activating HUD reports accepted section count and provides Done/Cancel without entering the screenshot.
 - Capture is bounded to 24 fragments and 5 minutes. Output is limited to 16,384 pixels on either axis, 20,000 logical points high, and 32,000,000 pixels total.
-- Identical frames are ignored. Large jumps, upward scrolling, dynamic/sticky content, geometry changes, and unverified overlaps fail explicitly rather than producing a claimed complete image.
+- Identical frames without a new scroll attempt are ignored. Large jumps, upward scrolling, changing sticky/dynamic content, geometry changes, and unverified overlaps fail explicitly rather than producing a claimed complete image.
 
 Manual Long does not infer a hidden DOM/AX block boundary, auto-scroll, or restore the position changed by the user. A long X post can be captured by drawing the fixed content-column region and scrolling it, but automatic whole-post boundary detection beyond the visible viewport remains separate browser/semantic work.
 
@@ -151,13 +154,12 @@ The desired X flow remains a future target: hover a visible loaded post, select 
 - Automatic X thread, conversation, or multi-post capture.
 - Screen recording, system audio, microphone, camera, or GIF export.
 - OCR, translation, QR recognition, text search, or automatic sensitive-data detection.
-- Annotation tools, blur, mosaic, arrows, text boxes, object removal, or redaction.
-- Post-capture cropping or other image editing.
+- Blur, freehand drawing, object removal, semantic redaction, or shapes beyond the implemented arrows and rectangles.
 - Screenshot history, cloud upload, sharing links, accounts, or sync.
 - Guaranteed recognition of Canvas, games, remote desktops, video surfaces, or inaccessible app content.
 
 ## Current Acceptance Boundary
 
-The current native MVP can be described as implemented when referring to the unified Smart/Region/Long overlay, AX/window/manual visible-region selection, ScreenCaptureKit still capture, bounded manual long stitching, capture delay, read-only preview, pin, pasteboard copy, and PNG save. Automatic native scrolling may only be described as **Automatic App Scroll (Experimental)** with its AX/static/single-display requirements and hard limits.
+The current native MVP can be described as implemented when referring to the unified Smart/Region/Long overlay, AX/window/manual visible-region selection, ScreenCaptureKit still capture, bounded manual long stitching, capture delay, post-capture crop/annotation editor, pin, pasteboard copy, and PNG save. Automatic native scrolling may only be described as **Automatic App Scroll (Experimental)** with its AX/static/single-display requirements and hard limits.
 
 Browser DOM whole-block capture may be described as implemented in code and automated-tested, but not real-browser/X verified. It must not be described as fully runtime-verified across all machines until the native and browser manual matrices in `TEST_PLAN.md` are recorded. Safari DOM/X native capture must remain Experimental until its bridge and real Safari/X GUI path are implemented and verified.

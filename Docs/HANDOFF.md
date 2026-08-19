@@ -9,8 +9,8 @@ Use this as the source-of-truth checklist when updating the root README or relea
 | Native AX/window/manual selection | Implemented | Runtime matrix still needs recorded verification. |
 | Native static capture | Implemented | ScreenCaptureKit; visible region on one display. |
 | Unified Smart/Region/Long overlay | Implemented, final GUI matrix in progress | One shortcut exposes all three modes. |
-| Manual Long | Implemented, final GUI matrix in progress | Fixed one-display region; user scrolls downward; stable frames and pixel overlaps are verified before stitching. |
-| Native preview/copy/pin/PNG save | Implemented | Preview is read-only; no post-capture crop. |
+| Manual Long | Implemented, final GUI matrix in progress | Fixed one-display region; verified overlaps, conservative fixed-top handling, and automatic bottom finish after a no-movement scroll attempt. |
+| Native crop/annotation editor and output | Implemented, editor GUI verified | Crop, arrow, rectangle, text, mosaic, numbered markers, undo/redo, zoom, copy, pin, and PNG save. |
 | Capture delay | Implemented | Off, 3 seconds, or 5 seconds. |
 | Global shortcut | Implemented | Configurable in Settings with validation, conflict rollback, and persistence. |
 | Full-screen app overlay | Implemented | Non-activating panels preserve the target app/Space; external preview is opt-in. |
@@ -20,13 +20,12 @@ Use this as the source-of-truth checklist when updating the root README or relea
 | Safari/X GUI path | Experimental/unverified | No real Safari/X end-to-end GUI evidence yet. |
 | Browser DOM whole-block capture | Implemented, GUI unverified | One-frame fast path plus bounded page scroll/crop/stitch path; real Chrome/Safari + X E2E outstanding. |
 | General-purpose long screenshot | Not implemented/promised | Dynamic/infinite/virtualized/nested/cross-display content is outside the current contract. |
-| Recording/OCR/annotation | Not implemented | Do not imply partial support. |
+| Recording/OCR/advanced redaction | Not implemented | Basic annotation is implemented; do not imply blur/object removal/semantic redaction. |
 
 ## README Rules
 
 - Say `configurable shortcut` with `Control-Shift-2` initial default and transactional conflict rollback.
-- Say `preview, copy, and PNG save`, not `preview and crop`.
-- Distinguish selection-time source cropping from a post-capture crop editor. Only the former exists.
+- Describe the post-capture editor exactly: crop, arrows, rectangles, text, mosaic, numbered markers, undo/redo, reset, and zoom; Copy/Pin/Save render the current edits.
 - Describe AX/window/manual selection as implemented; qualify runtime support with the actual test record.
 - Describe the Safari extension target as embedded and buildable.
 - Describe Safari DOM-to-native integration and X native capture as Experimental/unverified.
@@ -34,7 +33,7 @@ Use this as the source-of-truth checklist when updating the root README or relea
 - Describe browser DOM whole-block capture as implemented and automated-tested: one-frame fast path for visible blocks and bounded page scroll/crop/stitch for taller or partially offscreen blocks.
 - State that real Chrome/Safari + X E2E is outstanding; do not infer Safari success from `accepted: false` or shared code alone.
 - Distinguish unified **Long** (manual scroll, no AX requirement, no automatic scroll restoration) from **Automatic App Scroll (Experimental)** (AX/static/single-display requirements and restoration behavior).
-- Keep general-purpose dynamic/infinite/virtualized/nested/cross-display long screenshots, recording, OCR, annotation, and post-capture editing in the absent/not-promised list.
+- Keep general-purpose dynamic/infinite/virtualized/nested/cross-display long screenshots, recording, OCR, history, object removal, and semantic redaction in the absent/not-promised list.
 
 ## Suggested README Status Table
 
@@ -42,14 +41,14 @@ Use this as the source-of-truth checklist when updating the root README or relea
 | Capability | Status | Limit |
 | Native AX/window/manual selection | Implemented | Real display/permission matrix still being recorded. |
 | ScreenCaptureKit still capture | Implemented | Visible selection clipped to one display. |
-| Preview, copy, pin, PNG save | Implemented | Read-only preview; no crop editor. |
+| Crop/annotation editor, copy, pin, PNG save | Implemented | Basic local editor; no history, blur, object removal, or semantic redaction. |
 | Unified Smart/Region/Long | Implemented, GUI matrix in progress | One shortcut opens all modes; manual Long does not require AX. |
 | Global shortcut | Implemented | Settings recorder, persistence, conflict rollback, and Restore Default. |
 | Native Automatic App Scroll (Experimental) | Implemented, controlled runtime verified | Static, one-display AX scroll area with writable vertical scrollbar; 24 fragments/75 seconds/16,384 px per side/32M pixels. |
 | Browser DOM whole-block capture | Implemented, GUI unverified | Fast path plus bounded page scroll/crop/stitch; Chrome/Safari + X E2E outstanding. |
 | Safari extension target | Experimental | Builds, but handler declines native requests. |
 | Safari/X DOM-to-native capture | Not implemented | Bridge and GUI verification outstanding. |
-| General-purpose long capture, recording, OCR, annotations | Not included | Bounded long paths do not cover dynamic/infinite/virtualized/nested/cross-display content. |
+| General-purpose long capture, recording, OCR, advanced redaction | Not included | Bounded long paths do not cover dynamic/infinite/virtualized/nested/cross-display content. |
 ```
 
 ## Current User Flow to Document
@@ -59,10 +58,8 @@ Use this as the source-of-truth checklist when updating the root README or relea
 3. Optionally grant Accessibility for AX block detection.
 4. Press the shortcut shown in the sidebar (normally `Control-Shift-2`) or choose Capture.
 5. Choose Smart, Region, or Long in the bottom overlay toolbar.
-6. Select a Smart block or drag a region; in Long, scroll downward in small steps and finish from the HUD.
-7. Preview the result, copy it, pin it, or save it as PNG.
-
-Do not insert a crop/reset step.
+6. Select a Smart block or drag a region; in Long, scroll downward in small steps and finish from the HUD if automatic bottom detection does not finish first.
+7. Crop or annotate the result, then copy it, pin it, or save it as PNG.
 
 Document **Automatic App Scroll (Experimental)** as a separate advanced command, not as an automatic behavior of Smart or manual Long. It requires both Screen Recording and Accessibility permissions and a selected AX scroll area with a writable vertical scrollbar. It captures a static viewport repeatedly on one display, stitches verified overlaps, and attempts to restore the original scrollbar value after success, failure, or cancellation. The hard limits are 24 fragments, 75 seconds, 16,384 pixels on either side, and 32,000,000 pixels total; restoration failure is an explicit error.
 
@@ -104,7 +101,7 @@ Before making broader privacy claims, verify the release build and runtime logs.
 ## Test Evidence to Link
 
 - Native unit coverage: AX screen layout, Accessibility detector, candidate filter.
-- Native long-capture unit coverage: overlap estimator and vertical stitcher; privileged AX/ScreenCaptureKit E2E remains outstanding.
+- Native long-capture unit coverage: overlap estimator, fixed-top detector, vertical stitcher, and manual completion policy; controlled AX/ScreenCaptureKit success and timeout restoration are recorded, while the broader real-app matrix remains outstanding.
 - Browser unit coverage: geometry, slice planning, limits, sanitized URL, protocol, observed-scale crop, ordered session/tab/document failures, filenames.
 - Chrome/Safari browser whole-block capture: GUI test outstanding; record browser version, X/fixture scenario, seams, restoration, and failure behavior for a public compatibility statement.
 - Native privileged GUI matrix: outstanding unless a newer test record says otherwise.
@@ -114,15 +111,14 @@ Link to `Docs/TEST_PLAN.md` for detailed gates. Do not turn planned matrix items
 
 ## Known Limitations List
 
-- No post-capture crop editor.
+- Basic post-capture crop and annotation editing is implemented; there is no persistent edit history, blur, freehand drawing, object removal, or semantic redaction.
 - Native scrolling capture is Experimental and limited to a static, single-display AX scroll area with a writable vertical scrollbar.
 - Browser DOM whole-block capture is implemented but still lacks real Chrome/Safari + X E2E verification.
 - Dynamic/infinite content, virtualized lists, nested scrolling areas, cross-display composition, and general-purpose long capture are not promised.
 - No automatic X thread/multi-post capture.
 - No screen recording or audio.
 - No OCR, translation, text search, or sensitive-data recognition.
-- No annotations or redaction.
-- No history, pinning, cloud share, account, or sync.
+- No capture history, cloud share, account, or sync; pinning is implemented.
 - Canvas, games, remote desktops, and inaccessible content may require manual selection.
 - Cross-display native selections are clipped to the display containing the selection center.
 - Safari DOM/X native capture is not implemented.
@@ -138,12 +134,12 @@ Link to `Docs/TEST_PLAN.md` for detailed gates. Do not turn planned matrix items
 ## Pre-Release Claim Audit
 
 - [ ] Root README describes the configurable shortcut and full-screen Space behavior accurately.
-- [ ] Root README has no post-capture crop claim.
+- [ ] Root README describes the implemented editor and edited-output behavior accurately.
 - [ ] Root README says Safari target builds but native bridge is absent.
 - [ ] Root README does not call X/Safari DOM capture supported.
 - [ ] Browser whole-block capture is described as implemented and automated-tested, with real Chrome/Safari + X E2E outstanding.
 - [ ] Automatic native scrolling is named `Automatic App Scroll (Experimental)` and includes AX/static/single-display requirements, limits, and restoration behavior.
 - [ ] Native runtime claims cite the actual GUI matrix performed.
 - [ ] Browser claims cite browser/version and actual test performed.
-- [ ] General-purpose dynamic/infinite/virtualized/nested/cross-display long capture remains unpromised; recording, OCR, annotation, and post-capture editing remain excluded.
+- [ ] General-purpose dynamic/infinite/virtualized/nested/cross-display long capture remains unpromised; recording, OCR, history, object removal, and semantic redaction remain excluded.
 - [ ] No architecture target is presented as current code.

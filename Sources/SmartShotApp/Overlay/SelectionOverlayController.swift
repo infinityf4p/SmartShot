@@ -40,6 +40,7 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
     private var candidateRequestID = 0
     private var resolutionRequestID: Int?
     private var mode: Mode = .unified(.smart)
+    private var keyMonitor: Any?
 
     private struct CandidateRequest: Sendable {
         let id: Int
@@ -91,6 +92,8 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
             first.makeFirstResponder(view)
         }
 
+        installKeyMonitor()
+
         if mode.requiresCandidateDetection {
             let initialPoint = NSEvent.mouseLocation
             Task { @MainActor [weak self] in
@@ -102,6 +105,7 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
     }
 
     func cancel() {
+        guard !windows.isEmpty else { return }
         tearDown()
         delegate?.selectionOverlayDidCancel(self)
     }
@@ -355,6 +359,10 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
     }
 
     private func tearDown() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
         debounceTask?.cancel()
         debounceTask = nil
         resolutionTask?.cancel()
@@ -369,6 +377,20 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
         views.removeAll()
         candidates.removeAll()
         mode = .unified(.smart)
+    }
+
+    private func installKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+        }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard SelectionOverlayKeyCommand.command(for: event.keyCode) == .cancel else {
+                return event
+            }
+            guard let self, !self.windows.isEmpty else { return event }
+            self.cancel()
+            return nil
+        }
     }
 
     private func scrollingSelectionDecision(at clickPoint: CGPoint) -> ScrollingSelectionDecision {

@@ -9,7 +9,7 @@ settings:
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     CODE_SIGN_STYLE: Manual
-    CODE_SIGN_IDENTITY: SmartShot Local Development
+    CODE_SIGN_IDENTITY: BlockShot Local Development
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: 0.1.0
     ENABLE_HARDENED_RUNTIME: YES
@@ -95,8 +95,10 @@ targets:
       - Tests/SmartShotAppTests
       - path: Sources/SmartShotApp/Services/GlobalShortcutMonitor.swift
       - path: Sources/SmartShotApp/Services/CaptureOcclusionPolicy.swift
+      - path: Sources/SmartShotApp/Services/ManualScrollAttemptTracker.swift
       - path: Sources/SmartShotApp/Overlay/ScrollingSelectionCommit.swift
       - path: Sources/SmartShotApp/Overlay/CaptureSelectionMode.swift
+      - path: Sources/SmartShotApp/Overlay/SelectionOverlayKeyCommand.swift
       - path: Sources/SmartShotApp/Views/AppSymbols.swift
     dependencies:
       - target: SmartShotCore

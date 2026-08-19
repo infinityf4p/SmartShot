@@ -28,10 +28,43 @@ enum ScreenCaptureError: LocalizedError {
 }
 
 struct CapturedImage {
+    let cgImage: CGImage
     let image: NSImage
     let pngData: Data
     let logicalRect: CGRect
     let label: String
+
+    init(
+        cgImage: CGImage,
+        image: NSImage,
+        pngData: Data,
+        logicalRect: CGRect,
+        label: String
+    ) {
+        self.cgImage = cgImage
+        self.image = image
+        self.pngData = pngData
+        self.logicalRect = logicalRect
+        self.label = label
+    }
+
+    static func encoded(
+        cgImage: CGImage,
+        logicalRect: CGRect,
+        label: String
+    ) throws -> CapturedImage {
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        guard let data = bitmap.representation(using: .png, properties: [:]) else {
+            throw ScreenCaptureError.encodingFailed
+        }
+        return CapturedImage(
+            cgImage: cgImage,
+            image: NSImage(cgImage: cgImage, size: logicalRect.size),
+            pngData: data,
+            logicalRect: logicalRect,
+            label: label
+        )
+    }
 }
 
 struct ScreenCaptureFrame: @unchecked Sendable {
@@ -51,6 +84,7 @@ struct ScreenCaptureService {
         }
         let image = NSImage(cgImage: frame.image, size: frame.logicalRect.size)
         return CapturedImage(
+            cgImage: frame.image,
             image: image,
             pngData: data,
             logicalRect: frame.logicalRect,

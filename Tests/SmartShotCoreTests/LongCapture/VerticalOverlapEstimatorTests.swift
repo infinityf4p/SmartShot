@@ -136,6 +136,58 @@ final class VerticalOverlapEstimatorTests: XCTestCase {
         XCTAssertEqual(try normalizedBytes(of: stitched.image), try normalizedBytes(of: expected))
     }
 
+    func testThreeFrameFixedTopOffsetsAccumulateOnlyBodyScroll() throws {
+        let headerHeight = 12
+        let bodyHeight = 68
+        let delta = 17
+        let frames = try [0, delta, delta * 2].map {
+            try makeViewport(
+                width: 48,
+                headerHeight: headerHeight,
+                bodyHeight: bodyHeight,
+                bodyStart: $0
+            )
+        }
+        var configuration = testConfiguration()
+        configuration.fixedTopHeightPixels = headerHeight
+        let firstEstimate = try VerticalOverlapEstimator.estimate(
+            previous: frames[0],
+            current: frames[1],
+            configuration: configuration
+        )
+        let secondEstimate = try VerticalOverlapEstimator.estimate(
+            previous: frames[1],
+            current: frames[2],
+            configuration: configuration
+        )
+        let firstCumulativeScroll = firstEstimate.scrollDeltaPixels
+        let secondCumulativeScroll = firstCumulativeScroll + secondEstimate.scrollDeltaPixels
+
+        let stitched = try VerticalImageStitcher.stitch([
+            VerticalCaptureFragment(image: frames[0], verticalOffset: 0, scale: 1),
+            VerticalCaptureFragment(
+                image: frames[1],
+                verticalOffset: CGFloat(headerHeight + firstCumulativeScroll),
+                scale: 1,
+                sourceTopInsetPixels: headerHeight
+            ),
+            VerticalCaptureFragment(
+                image: frames[2],
+                verticalOffset: CGFloat(headerHeight + secondCumulativeScroll),
+                scale: 1,
+                sourceTopInsetPixels: headerHeight
+            ),
+        ])
+        let expected = try makeViewport(
+            width: 48,
+            headerHeight: headerHeight,
+            bodyHeight: bodyHeight + delta * 2,
+            bodyStart: 0
+        )
+
+        XCTAssertEqual(try normalizedBytes(of: stitched.image), try normalizedBytes(of: expected))
+    }
+
     func testRejectsImagesWithoutReliableOverlap() throws {
         let previous = try makePatternImage(width: 48, height: 80, seed: 11)
         let current = try makePatternImage(width: 48, height: 80, seed: 193)

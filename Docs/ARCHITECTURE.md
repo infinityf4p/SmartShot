@@ -2,7 +2,7 @@
 
 ## Status and Scope
 
-This document distinguishes the current implementation from the target Safari DOM architecture. Sections labeled **Current** describe code present as of 2026-08-15. Sections labeled **Target** are design direction, not evidence of implementation. Manual Long and automatic AX scrolling are bounded native paths; the browser path still lacks real Chrome/Safari + X end-to-end evidence.
+This document distinguishes the current implementation from the target Safari DOM architecture. Sections labeled **Current** describe code present as of 2026-08-19. Sections labeled **Target** are design direction, not evidence of implementation. Manual Long and automatic AX scrolling are bounded native paths; the browser path still lacks real Chrome/Safari + X end-to-end evidence.
 
 ## Current Native Architecture
 
@@ -22,7 +22,7 @@ SwiftUI app / MenuBarExtra / registered global shortcut
             -> fixed manual region
             -> ManualScrollingCaptureService
                  -> stable ScreenCaptureKit frames
-                 -> VerticalOverlapEstimator + VerticalImageStitcher
+                 -> VerticalFixedTopDetector + VerticalOverlapEstimator + VerticalImageStitcher
                  -> ManualScrollingCaptureHUDController
   -> Automatic App Scroll (Experimental)
        -> scrollable-area selection
@@ -31,7 +31,7 @@ SwiftUI app / MenuBarExtra / registered global shortcut
             -> repeated ScreenCaptureKit fragments
             -> VerticalOverlapEstimator + VerticalImageStitcher
   -> optional 0/3/5-second countdown
-  -> read-only preview
+  -> CaptureEditorModel + ScreenshotRenderer
   -> NSPasteboard, pinned NSPanel, or NSSavePanel + atomic PNG write
 ```
 
@@ -44,7 +44,7 @@ idle -> selecting -> capturing -> idle
   \-> failed(message)
 ```
 
-`AppModel` stores only the latest `CapturedImage`. It exposes start, copy, save, and error-clear actions. The preview displays the captured image with aspect-fit scaling. It does not expose an editable crop model.
+`AppModel` stores the latest `CapturedImage` and a `CaptureEditorModel` created for that capture. Copy, Pin, and Save request the editor's rendered output, while automatic copy immediately after capture still uses the unedited source image.
 
 ### Global Shortcut
 
@@ -107,13 +107,17 @@ The overlay debounces pointer updates and runs live AX inspection away from the 
 8. calls `SCScreenshotManager.captureImage`;
 9. encodes PNG and returns the image, bytes, logical rectangle, and label.
 
-The service performs source-region cropping as part of screenshot acquisition. This is not post-capture editing. There is no `CropModel`, crop UI, or second bitmap crop after preview.
+### Post-Capture Editing
+
+`CaptureEditorModel` owns a `ScreenshotEditHistory` and keeps the original `CapturedImage` immutable. `ScreenshotEditDocument` stores a normalized crop rectangle and normalized annotations, so edits remain independent of Retina scale and preview zoom. `ScreenshotRenderer` applies the crop, mosaics raster regions, and draws arrows, rectangles, text, and numbered markers into a new RGBA bitmap. Undo/redo stores bounded document snapshots rather than duplicated image buffers.
+
+The preview render is limited to 2,400 pixels on its longest side and 8 million pixels; final Copy, Pin, and Save render from the original bitmap with a 50-million-pixel safety limit. A cached final render is invalidated whenever the document changes. The Debug-only `--editor-fixture` path supplies a deterministic image for GUI testing and is compiled out of Release.
 
 ### Manual Long
 
-`ManualScrollingCaptureService` prepares one fixed ScreenCaptureKit source rectangle and leaves the target application interactive. It repeatedly captures the same rectangle, waits until two consecutive frames are stable, and compares each stable frame with the last accepted frame. Identical frames are ignored. A changed frame is accepted only when `VerticalOverlapEstimator` finds a reliable downward translation; `VerticalImageStitcher` then copies only newly revealed rows.
+`ManualScrollingCaptureService` prepares one fixed ScreenCaptureKit source rectangle and leaves the target application interactive. It repeatedly captures the same rectangle, waits until two consecutive frames are stable, and compares each stable frame with the last accepted frame. A changed frame is accepted only when `VerticalOverlapEstimator` finds a reliable downward translation; `VerticalImageStitcher` then copies only newly revealed rows. `VerticalFixedTopDetector` conservatively identifies an unchanged top strip followed by moving content, and later fragments exclude that strip during overlap estimation and stitching.
 
-`ManualScrollingCaptureHUDController` is a non-activating floating panel excluded by the app-level ScreenCaptureKit filter. It reports accepted section count and lets the user finish or cancel without switching Spaces. The manual controller does not synthesize scroll events, require Accessibility, infer document boundaries, or restore the position changed by the user.
+`ManualScrollingCaptureHUDController` is a non-activating floating panel excluded by the app-level ScreenCaptureKit filter. It reports accepted section count and lets the user finish or cancel without switching Spaces. A global scroll monitor counts gestures that start inside the selected rectangle; after at least one accepted movement, a later gesture followed by an equivalent frame is treated as a bottom signal and completes automatically. The manual controller does not synthesize scroll events, require Accessibility, infer document boundaries, or restore the position changed by the user.
 
 The manual path is bounded to 24 fragments and 5 minutes, with limits of 20,000 logical points, 16,384 pixels on either output axis, and 32 million output pixels. Large jumps, reverse movement, changing geometry, or pixels that cannot produce a reliable seam are explicit failures.
 
@@ -295,8 +299,8 @@ BrowserExtension
 | Browser DOM whole-block capture | Implemented and automated-tested; real Chrome/Safari + X E2E not performed. |
 | Native `Automatic App Scroll (Experimental)` | Implemented with bounded AX/static/single-display scope; controlled runtime evidence recorded. |
 | User-configurable shortcut | Implemented with validation, Carbon conflict rollback, persistence, and Restore Default. |
-| Post-capture crop model/UI | Not implemented and outside v0.1. |
+| Post-capture crop and annotation editor | Implemented; final GUI rendering is exercised with a deterministic Debug fixture. |
 | General-purpose long screenshot across dynamic/infinite/virtualized/nested/cross-display content | Not implemented or promised. |
-| Recording, OCR, annotation | Not implemented and outside v0.1. |
+| Recording and OCR | Not implemented and outside v0.1. |
 | Privileged real-device permission/display matrix | Outstanding verification work. |
 | AX timeout/cancellation isolation | Future hardening. |

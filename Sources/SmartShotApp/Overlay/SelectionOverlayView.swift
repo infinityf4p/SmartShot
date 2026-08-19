@@ -235,18 +235,28 @@ final class SelectionOverlayView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        case 53:
+        switch SelectionOverlayKeyCommand.command(for: event.keyCode) {
+        case .cancel:
             delegate?.overlayDidCancel(self)
-        case 36, 76:
+        case .confirm:
             delegate?.overlay(self, didFinishAt: NSEvent.mouseLocation, manualRect: nil)
-        case 123, 125:
-            delegate?.overlay(self, cycleBy: -1)
-        case 124, 126:
-            delegate?.overlay(self, cycleBy: 1)
-        default:
+        case let .cycle(delta):
+            delegate?.overlay(self, cycleBy: delta)
+        case .passThrough:
             super.keyDown(with: event)
         }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard SelectionOverlayKeyCommand.command(for: event.keyCode) == .cancel else {
+            return super.performKeyEquivalent(with: event)
+        }
+        delegate?.overlayDidCancel(self)
+        return true
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        delegate?.overlayDidCancel(self)
     }
 
     private var localSelectionRect: CGRect? {

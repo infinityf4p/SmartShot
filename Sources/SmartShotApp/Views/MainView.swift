@@ -130,16 +130,20 @@ struct MainView: View {
     private var preview: some View {
         VStack(spacing: 0) {
             if let capture = model.latestCapture {
-                VStack(spacing: 16) {
-                    GeometryReader { proxy in
-                        Image(nsImage: capture.image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: proxy.size.width, maxHeight: proxy.size.height)
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-                            .accessibilityLabel("Latest screenshot preview")
+                VStack(spacing: 0) {
+                    if let editor = model.captureEditor {
+                        CaptureEditorView(editor: editor)
+                    } else {
+                        GeometryReader { proxy in
+                            Image(nsImage: capture.image)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: proxy.size.width, maxHeight: proxy.size.height)
+                                .frame(width: proxy.size.width, height: proxy.size.height)
+                                .accessibilityLabel("Latest screenshot preview")
+                        }
+                        .padding(20)
                     }
-                    .padding(20)
 
                     Divider()
 
@@ -148,7 +152,7 @@ struct MainView: View {
                             Text(capture.label)
                                 .font(.subheadline.weight(.medium))
                                 .lineLimit(1)
-                            Text("\(Int(capture.logicalRect.width)) x \(Int(capture.logicalRect.height)) points")
+                            Text("\(Int(previewSize.width)) x \(Int(previewSize.height)) points")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -188,6 +192,10 @@ struct MainView: View {
                 }
             }
         }
+    }
+
+    private var previewSize: CGSize {
+        model.captureEditor?.previewLogicalSize ?? model.latestCapture?.logicalRect.size ?? .zero
     }
 
     private var statusText: String {

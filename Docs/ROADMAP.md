@@ -2,7 +2,7 @@
 
 ## Current Baseline: v0.1 Native MVP
 
-Implemented baseline as of 2026-08-15:
+Implemented baseline as of 2026-08-19:
 
 - Native macOS 14+ SwiftUI/AppKit app.
 - Configurable global capture shortcut with built-in launch fallback, conflict rollback, persistence, visible status, and retry.
@@ -11,8 +11,8 @@ Implemented baseline as of 2026-08-15:
 - Multi-display selection overlay and candidate cycling.
 - ScreenCaptureKit still capture.
 - One shortcut and overlay for Smart, Region, and manual Long modes.
-- Bounded manual long capture with stable-frame sampling and seam verification.
-- Read-only preview, pasteboard copy, pin-to-screen, and PNG save.
+- Bounded manual long capture with stable-frame sampling, automatic bottom detection after a no-movement scroll attempt, fixed-top handling, and seam verification.
+- Post-capture crop, arrows, rectangles, text, mosaic, numbered markers, undo/redo, zoom, pasteboard copy, pin-to-screen, and PNG save.
 - Optional 0/3/5-second capture delay.
 - Screen Recording and Accessibility permission UI.
 - Embedded Safari WebExtension target that builds.
@@ -23,11 +23,10 @@ Implemented baseline as of 2026-08-15:
 
 Not in the baseline:
 
-- Post-capture crop.
 - General-purpose long capture for dynamic/infinite/virtualized/nested/cross-display content.
 - Recording.
 - OCR.
-- Annotation.
+- Advanced editing such as freehand drawing, blur, object removal, and semantic redaction.
 
 The next native priority is runtime verification on real display and permission configurations, not feature expansion.
 
@@ -38,7 +37,7 @@ Outcome: turn implemented native paths into evidence-backed support claims.
 - Complete Retina, mixed-scale, negative-origin, and cross-display tests.
 - Verify Screen Recording and Accessibility denial/recovery on current macOS.
 - Verify AX/window/manual selection and overlay teardown under repeated use.
-- Verify preview, copy, PNG save, and save failure/cancellation from a signed build.
+- Verify the complete crop/annotation matrix plus copy, pin, PNG save, and save failure/cancellation from a signed build.
 - Expand native **Automatic App Scroll (Experimental)** evidence beyond the completed controlled success/timeout-restoration run to cancellation, hard-limit, restoration-failure, and real-application cases.
 - Verify default, fallback, retry, and foreground delivery with real keyboard input and competing apps.
 - Verify shortcut recording and persistence across keyboard input sources on signed builds.
@@ -84,7 +83,7 @@ Candidates after native and Safari correctness are established:
 - Shortcuts, URL scheme, or CLI automation.
 - Optional source metadata export with explicit privacy controls.
 
-Post-capture cropping may be evaluated here, but it is neither implemented nor promised for v0.1.
+Extend the existing editor only after capture correctness remains stable; history and output presets are separate workflow features.
 
 ## Research Track: Long-Capture Hardening
 
@@ -116,11 +115,11 @@ Only the current bounded contracts may be claimed. Promotion requires controlled
 - ScreenCaptureKit video.
 - System audio, microphone, camera, cursor/click display, trimming, and GIF export.
 
-### Annotation
+### Advanced Editing
 
-- Arrow, rectangle, text, numbered steps, blur/mosaic, and redaction.
+- Freehand drawing, blur, additional shapes, object removal, and irreversible redaction.
 
-These tracks need separate architecture and tests. They are not partial v0.1 capabilities.
+These tracks need separate architecture and tests. Basic crop, arrow, rectangle, text, mosaic, and numbered-marker editing is already part of the current baseline.
 
 ## Prioritization Rules
 

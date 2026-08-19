@@ -25,6 +25,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
 
     @Published private(set) var state: CaptureState = .idle
     @Published private(set) var latestCapture: CapturedImage?
+    @Published private(set) var captureEditor: CaptureEditorModel?
     @Published private(set) var scrollingCaptureProgress: Double?
     @Published private(set) var manualScrollingCaptureProgress: ManualScrollingCaptureProgress?
     @Published private(set) var shortcutRegistration: GlobalShortcutMonitor.Registration = .inactive
@@ -78,6 +79,13 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         shortcutMonitor = GlobalShortcutMonitor(defaults: defaults) { [weak self] in
             self?.startCapture(origin: .globalShortcut)
         }
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--editor-fixture"),
+           let fixture = try? DebugCaptureFixture.makeEditorCapture() {
+            latestCapture = fixture
+            captureEditor = CaptureEditorModel(capture: fixture)
+        }
+#endif
     }
 
     var isBusy: Bool {
@@ -349,18 +357,26 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
     }
 
     func copyLatest() {
-        guard let latestCapture else { return }
-        copy(latestCapture)
+        do {
+            guard let capture = try captureForOutput() else { return }
+            copy(capture)
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
     }
 
     func pinLatest() {
-        guard let latestCapture else { return }
-        let controller = PinnedCaptureWindowController(capture: latestCapture)
-        controller.onClose = { [weak self] id in
-            self?.pinnedCaptures.removeAll { $0.id == id }
+        do {
+            guard let capture = try captureForOutput() else { return }
+            let controller = PinnedCaptureWindowController(capture: capture)
+            controller.onClose = { [weak self] id in
+                self?.pinnedCaptures.removeAll { $0.id == id }
+            }
+            pinnedCaptures.append(controller)
+            controller.show()
+        } catch {
+            state = .failed(error.localizedDescription)
         }
-        pinnedCaptures.append(controller)
-        controller.show()
     }
 
     func clearShortcutFeedback() {
@@ -375,14 +391,15 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
     }
 
     func saveLatest() {
-        guard let latestCapture else { return }
+        guard latestCapture != nil else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
         panel.nameFieldStringValue = defaultFilename()
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try latestCapture.pngData.write(to: url, options: .atomic)
+            guard let capture = try captureForOutput() else { return }
+            try capture.pngData.write(to: url, options: .atomic)
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -397,6 +414,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
 
     private func completeCapture(_ capture: CapturedImage) {
         latestCapture = capture
+        captureEditor = CaptureEditorModel(capture: capture)
         if automaticallyCopiesCaptures {
             copy(capture)
         }
@@ -411,6 +429,13 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         }
         activeCaptureMode = .standard
         activeCaptureOrigin = .mainWindow
+    }
+
+    private func captureForOutput() throws -> CapturedImage? {
+        if let captureEditor {
+            return try captureEditor.renderedCapture()
+        }
+        return latestCapture
     }
 
     private func handleCaptureFailure(_ error: Error) {
