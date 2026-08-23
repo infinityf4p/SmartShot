@@ -3,6 +3,22 @@ import Testing
 @testable import SmartShotCore
 
 struct CandidateFilterTests {
+    @Test func preservesWindowIdentityWhenNormalizing() {
+        let candidate = CaptureCandidate(
+            rect: CGRect(x: 10, y: 10, width: 100, height: 80),
+            source: .window,
+            label: "Window",
+            windowID: 42
+        )
+
+        let result = CandidateFilter.normalized(
+            [candidate],
+            within: CGRect(x: 0, y: 0, width: 200, height: 200)
+        )
+
+        #expect(result.first?.windowID == 42)
+    }
+
     @Test func convertsCoordinatesAroundPrimaryDisplayTop() {
         let appKitRect = CGRect(x: -1200, y: 950, width: 300, height: 200)
 

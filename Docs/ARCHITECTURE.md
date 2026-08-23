@@ -1,306 +1,263 @@
 # SmartShot Architecture
 
-## Status and Scope
+## Status and Evidence Boundary
 
-This document distinguishes the current implementation from the target Safari DOM architecture. Sections labeled **Current** describe code present as of 2026-08-19. Sections labeled **Target** are design direction, not evidence of implementation. Manual Long and automatic AX scrolling are bounded native paths; the browser path still lacks real Chrome/Safari + X end-to-end evidence.
+This document describes code present in the checkout on 2026-08-24. It keeps four different claims separate:
 
-## Current Native Architecture
+- **Implemented**: the production path and a user-facing entry point exist.
+- **Automated coverage**: deterministic tests exercise the named logic, but not macOS permissions, browser installation, or GUI interaction.
+- **GUI verified**: a recorded signed-app or privileged run exists for the stated scenario only.
+- **GUI pending**: the implementation still needs the manual matrix in [TEST_PLAN.md](TEST_PLAN.md).
+
+A successful build, a registered permission, a configured browser host, and a correct end-to-end capture are different facts.
+
+## System Overview
 
 ```text
-SwiftUI app / MenuBarExtra / registered global shortcut
+SwiftUI window / MenuBarExtra / Carbon shortcut / smartshot:// URL / bundled CLI
   -> AppModel
-  -> Unified Capture overlay
-       -> Smart
-       -> SelectionOverlayController
-            -> AccessibilityBlockDetector + AXUIElement provider
-            -> WindowCandidateProvider
-            -> manual drag candidate
-       -> ScreenCaptureService (ScreenCaptureKit)
-       -> Region
-            -> manual drag candidate -> ScreenCaptureService
-       -> Long
-            -> fixed manual region
-            -> ManualScrollingCaptureService
-                 -> stable ScreenCaptureKit frames
-                 -> VerticalFixedTopDetector + VerticalOverlapEstimator + VerticalImageStitcher
-                 -> ManualScrollingCaptureHUDController
-  -> Automatic App Scroll (Experimental)
-       -> scrollable-area selection
-       -> AccessibilityScrollCaptureTarget
-       -> ScrollingCaptureService
-            -> repeated ScreenCaptureKit fragments
-            -> VerticalOverlapEstimator + VerticalImageStitcher
-  -> optional 0/3/5-second countdown
-  -> CaptureEditorModel + ScreenshotRenderer
-  -> NSPasteboard, pinned NSPanel, or NSSavePanel + atomic PNG write
+      -> unified selection overlay
+           -> Smart: AX blocks + windows + manual drag
+           -> Region: manual drag
+           -> Long: fixed region + user-driven scrolling
+           -> App Scroll (Experimental): AX scroll target + driven scrolling
+      -> ScreenCaptureKit pixels
+      -> CaptureEditorModel
+           -> ScreenshotRenderer
+           -> local Vision OCR + sensitive-pattern helpers
+      -> post-processing policy
+           -> optional automatic clipboard copy
+           -> optional local history
+      -> Copy / Pin / Save / Quick Save / Flatten
+
+Main window / app commands / MenuBarExtra recording entry
+  -> AppModel active-operation coordinator
+      -> recording-region overlay or display under pointer
+      -> RecordingSourceMapper -> one SCDisplay / display-local sourceRect
+      -> ScreenRecordingService actor
+           -> SCStream video + optional system audio
+           -> optional AVCaptureSession microphone
+           -> RecordingSampleRouter -> RecordingAssetWriter
+      -> H.264/AAC MP4 export -> Quick Save folder
+      -> AVKit preview / reveal / copy file / Save As / bounded GIF export
+
+Browser action
+  -> DOM selection
+  -> visible crop or bounded browser scroll/crop/stitch
+  -> completed PNG
+      -> strict native import -> SmartShot preview/editor/history policy
+      -> browser download fallback when native import is unavailable or rejected
 ```
 
-### SwiftUI and Application State
+## Native Capture Pipeline
 
-`SmartShotApp` owns the main window, menu commands, and menu-bar extra. `AppModel` owns the capture state:
+### Application State and Entry Points
+
+`SmartShotApp` owns the main window, menu commands, menu-bar extra, and URL delivery. `AppModel` owns screenshot and recording operation state, the latest `CapturedImage` or `RecordingArtifact`, the current editor, permissions, output preferences, history, browser integration, and in-flight cancellation.
+
+The public URL routes and bundled CLI converge on `SmartShotExternalCommand`. Capture URLs start Smart, Region, Long, or Automatic App Scroll; Quick Save renders the latest capture; Show activates the app. The CLI uses `NSWorkspace.OpenConfiguration`: Capture and Quick Save do not activate SmartShot, while Show does. It exits after LaunchServices accepts or rejects the URL, so it does not wait for capture completion or return a file path. `smartshot://import` is a separate internal browser-import route.
+
+### Shortcut and Overlay
+
+`GlobalShortcutMonitor` uses Carbon for an exclusive global shortcut. The persisted value stores a hardware key code and normalized modifiers. A replacement is registered before the old shortcut is removed, so conflict or validation failure leaves the previous working shortcut intact.
+
+`SelectionOverlayController` creates one non-activating panel per `NSScreen` with all-application-Space and full-screen-auxiliary behavior. The overlay supports Smart, Region, Long, and App Scroll from one screenshot invocation, plus a separate recording-region drag mode. Screenshot selection supports nested candidate cycling, Return/click confirmation, drag selection, and Escape cancellation. Manual screenshot and recording drags are constrained to the display where the drag begins; cross-display composition is not implemented.
+
+### Candidate Providers
+
+Smart mode combines:
+
+1. `AccessibilityBlockDetector`, when Accessibility is trusted.
+2. `WindowCandidateProvider`, using visible Core Graphics windows.
+3. A manual rectangle from the overlay.
+
+`CandidateFilter` clips candidates to desktop bounds, rejects undersized rectangles, deduplicates rounded frames, and sorts by area. AX inspection is debounced and request-tagged so stale asynchronous results cannot revive a prior highlight after pointer movement, mode changes, or teardown.
+
+`CaptureCandidate.Source.webDOM` remains in the shared model, but the current browser integration does not map DOM rectangles into this native selector. The browser creates the final PNG itself and imports that image.
+
+### Pixel Capture and Coordinates
+
+`ScreenCaptureService` rechecks Screen Recording access, obtains live `SCShareableContent`, requires the complete selection to fit one capturable display, excludes SmartShot, and captures with `SCScreenshotManager`. A cross-display or partially off-display selection fails explicitly instead of returning silently truncated pixels; only sub-point edge rounding is tolerated.
+
+The native coordinate contract is:
 
 ```text
-idle -> selecting -> capturing -> idle
-  \-> failed(message)
+AppKit global logical rectangle
+  -> require containment in one NSScreen.frame
+  -> AppKit-to-Quartz conversion
+  -> display-local ScreenCaptureKit sourceRect
+  -> output pixels using the selected screen scale
 ```
 
-`AppModel` stores the latest `CapturedImage` and a `CaptureEditorModel` created for that capture. Copy, Pin, and Save request the editor's rendered output, while automatic copy immediately after capture still uses the unedited source image.
+Negative display origins, mixed 1x/2x arrangements, scaled resolutions, and live display changes remain real-hardware acceptance obligations.
 
-### Global Shortcut
-
-`GlobalShortcutMonitor` uses exclusive Carbon hot-key registration after the main window appears. On launch it tries the persisted built-in combination first and then the other built-in combination if occupied; custom shortcuts are never silently replaced. `KeyboardShortcutValue` persists the hardware key code and normalized modifier bits. A custom update registers the candidate first, persists it, switches the active identifier, and only then unregisters the previous hot key. Conflicts and failures therefore leave the prior shortcut active. During recording, the existing Carbon event is routed back to the recorder instead of starting capture, allowing the active combination to be recorded without releasing its registration. SwiftUI command key equivalents do not duplicate the global capture shortcut.
-
-`SelectionOverlayController` creates non-activating `NSPanel` overlays with full-screen auxiliary and all-application Space behavior. Capture origin is explicit: main-window captures reveal the preview, while menu-bar and global-shortcut captures remain in the target Space by default. Manual drags are clamped to their starting display because multi-display image composition is outside the current MVP.
-
-### Overlay and Candidate Providers
-
-`SelectionOverlayController` creates one borderless AppKit overlay window per `NSScreen`. It collects candidates from:
-
-1. `AccessibilityBlockDetector`, when `AXIsProcessTrusted()` is true.
-2. `WindowCandidateProvider`, using the visible Core Graphics window list.
-3. A manual rectangle created by dragging in `SelectionOverlayView`.
-
-`CandidateFilter` clips candidates to desktop bounds, rejects undersized rectangles, deduplicates rounded frames, and sorts by area. The overlay cycles the resulting array and draws the current candidate on every screen, clipped to each screen frame.
-
-### Current Candidate Contract
-
-```swift
-public struct CaptureCandidate: Identifiable, Equatable, Sendable {
-    public enum Source: String, Sendable {
-        case accessibility
-        case webDOM
-        case window
-        case manual
-    }
-
-    public let id: UUID
-    public let rect: CGRect
-    public let source: Source
-    public let label: String
-    public let level: Int
-}
-```
-
-`rect` is expected to be an AppKit global logical-point rectangle before capture. The `.webDOM` case exists in the model, but no current native provider creates such a candidate.
-
-### Accessibility Path
-
-`SystemAccessibilityHierarchyProvider` uses `AXUIElementCopyElementAtPosition` and walks a bounded parent chain. The detector maps useful AX roles and frames to candidates. Its coordinate adapter is covered by `AXScreenLayoutTests`; role/filter behavior is covered by `AccessibilityBlockDetectorTests`.
-
-The overlay debounces pointer updates and runs live AX inspection away from the main actor. Request identifiers prevent stale results from reviving an old highlight after movement, mode changes, or teardown. AX calls still depend on target-process response time and retain explicit messaging timeouts where live scroll targets are resolved.
-
-### Window Path
-
-`WindowCandidateProvider` reads on-screen normal-level windows under the pointer and creates a window candidate. This path remains available without Accessibility permission.
-
-### Capture Path
-
-`ScreenCaptureService`:
-
-1. Rechecks Screen Recording permission.
-2. obtains live `SCShareableContent`;
-3. resolves the `NSScreen` containing the selected rectangle's center;
-4. clips the selection to that screen;
-5. converts the AppKit rectangle to Quartz coordinates;
-6. builds an `SCContentFilter` that excludes the SmartShot application;
-7. sets `SCStreamConfiguration.sourceRect`, width, and height;
-8. calls `SCScreenshotManager.captureImage`;
-9. encodes PNG and returns the image, bytes, logical rectangle, and label.
-
-### Post-Capture Editing
-
-`CaptureEditorModel` owns a `ScreenshotEditHistory` and keeps the original `CapturedImage` immutable. `ScreenshotEditDocument` stores a normalized crop rectangle and normalized annotations, so edits remain independent of Retina scale and preview zoom. `ScreenshotRenderer` applies the crop, mosaics raster regions, and draws arrows, rectangles, text, and numbered markers into a new RGBA bitmap. Undo/redo stores bounded document snapshots rather than duplicated image buffers.
-
-The preview render is limited to 2,400 pixels on its longest side and 8 million pixels; final Copy, Pin, and Save render from the original bitmap with a 50-million-pixel safety limit. A cached final render is invalidated whenever the document changes. The Debug-only `--editor-fixture` path supplies a deterministic image for GUI testing and is compiled out of Release.
+## Long Capture Paths
 
 ### Manual Long
 
-`ManualScrollingCaptureService` prepares one fixed ScreenCaptureKit source rectangle and leaves the target application interactive. It repeatedly captures the same rectangle, waits until two consecutive frames are stable, and compares each stable frame with the last accepted frame. A changed frame is accepted only when `VerticalOverlapEstimator` finds a reliable downward translation; `VerticalImageStitcher` then copies only newly revealed rows. `VerticalFixedTopDetector` conservatively identifies an unchanged top strip followed by moving content, and later fragments exclude that strip during overlap estimation and stitching.
+`ManualScrollingCaptureService` holds one ScreenCaptureKit rectangle while the target application stays interactive. The user scrolls downward in short steps. The service waits for stable frames, accepts only reliable downward overlap, removes only newly revealed rows, and handles one conservative unchanged top strip.
 
-`ManualScrollingCaptureHUDController` is a non-activating floating panel excluded by the app-level ScreenCaptureKit filter. It reports accepted section count and lets the user finish or cancel without switching Spaces. A global scroll monitor counts gestures that start inside the selected rectangle; after at least one accepted movement, a later gesture followed by an equivalent frame is treated as a bottom signal and completes automatically. The manual controller does not synthesize scroll events, require Accessibility, infer document boundaries, or restore the position changed by the user.
+The non-activating HUD exposes Done and Cancel without taking over the target Space. A monitored scroll attempt after accepted movement can signal the bottom when it produces an equivalent frame. Manual Long does not synthesize scrolling, infer a hidden semantic document boundary, or restore the position changed by the user.
 
-The manual path is bounded to 24 fragments and 5 minutes, with limits of 20,000 logical points, 16,384 pixels on either output axis, and 32 million output pixels. Large jumps, reverse movement, changing geometry, or pixels that cannot produce a reliable seam are explicit failures.
+Bounds: 24 fragments, 5 minutes, 20,000 logical points of height, 16,384 pixels on either output axis, and 32 million output pixels.
 
 ### Automatic App Scroll (Experimental)
 
-`AccessibilityScrollCaptureTarget.resolve` walks up from the selected point and accepts only the selected `AXScrollArea` whose frame matches the candidate and whose vertical `AXScrollBar` exposes a finite, non-empty, writable `AXValue` range. It records the owning process/window, scroll-area and capture frames, current frontmost process, range, and original scroll value. The capture frame must fit fully on one `NSScreen`; visible scrollbar strips are excluded from that frame.
+`AccessibilityScrollCaptureTarget` accepts only one static, single-display `AXScrollArea` whose vertical scrollbar has a finite writable `AXValue` range. It records the owning process/window, frames, range, frontmost application, and original scroll value.
 
-`ScrollingCaptureService` then:
+`ScrollingCaptureService` validates identity and geometry, moves to the start, captures stable ScreenCaptureKit frames while advancing the AX scrollbar, verifies overlap and endpoint progress, stitches the fragments, and attempts to restore the exact original value after success, failure, or cancellation. Restoration failure is surfaced explicitly.
 
-1. validates that the app, frontmost process, window frame, scroll-area frame, capture frame, and scrollbar range have not changed;
-2. moves the scrollbar to its minimum and verifies a stable initial frame;
-3. captures the same viewport repeatedly with ScreenCaptureKit while advancing the writable AX scrollbar;
-4. estimates reliable vertical overlap, retries with a smaller scroll step when possible, and rejects unchanged or unstable content;
-5. verifies the final scrollbar position and stable ending frame;
-6. stitches the verified fragments vertically and returns one PNG;
-7. restores the recorded scroll value after success, thrown error, or task cancellation.
+Bounds: 24 fragments, 75 seconds, 20,000 logical points, 16,384 pixels per output axis, and 32 million output pixels. Dynamic or infinite feeds, virtualized lists, nested scroll areas, changing content, horizontal scrolling, and cross-display areas are not supported claims.
 
-The default bounds are 24 fragments, 75 seconds, 20,000 logical points of stitched height, 16,384 pixels on either output axis, and 32,000,000 output pixels. A restoration failure is reported explicitly rather than hidden behind the original error.
+## Editor, OCR, and Output
 
-This architecture is designed for a static, single-display AX scroll area with a writable vertical scrollbar. It does not claim dynamic or infinite feeds, virtualized lists, nested scroll areas, cross-display composition, horizontal scrolling, or changing content. Overlap/stitching logic has automated coverage; the privileged real-application path still needs the manual matrix in `TEST_PLAN.md`.
+`CaptureEditorModel` keeps the original capture immutable and stores a normalized crop plus normalized annotations in `ScreenshotEditHistory`. Current tools are Select, Crop, Freehand, Arrow, Rectangle, Ellipse, Text, Mosaic, Blur, opaque Redaction, Spotlight, Magnifier, and Counter. Select can move or delete annotations; the UI also exposes color, line width, undo, redo, reset, and 100%-400% zoom.
 
-### Coordinate Contract
+`ScreenshotRenderer` produces a bounded preview from the current document and renders final Copy, Pin, Save, Quick Save, and Flatten output from the original bitmap. The preview is bounded to 2,400 pixels on its longest side and 8 million pixels; final rendering is bounded to 50 million pixels. Flatten replaces the current source and updates the same history item when one exists.
 
-The native selection contract uses AppKit global logical points. Current conversion is:
+`TextRecognitionService` runs Vision `.accurate` recognition locally with language correction and automatic language detection. Images are tiled at up to 4,096 x 4,096 pixels with 192-pixel overlap, capped at 64 million input pixels and 2,000 recognized blocks. Post-processing converts Vision geometry to the editor's top-left normalized coordinates, restores reading order, and deduplicates overlap results.
 
-```text
-AppKit global logical rect
-  -> clip to NSScreen.frame
-  -> ScreenGeometry.cocoaToQuartz
-  -> subtract SCDisplay.frame origin
-  -> ScreenCaptureKit sourceRect
-  -> width/height multiplied by NSScreen.backingScaleFactor
-```
+The editor can copy recognized text, redact all recognized blocks, or add opaque redactions for supported email, phone, Luhn-valid payment-card, and checksum/date-valid Chinese national-ID matches. Detection is heuristic; blur and mosaic are visual effects, not irreversible privacy output.
 
-Important current policy:
+`CaptureOutputService` supports PNG and JPEG, two filename styles, atomic Quick Save, collision avoidance, and a configurable directory initially resolved as `~/Pictures/SmartShot`.
 
-- A selection crossing displays is clipped to the display containing its center.
-- Multiple and negative-origin display layouts must be verified with real hardware.
-- The implementation currently uses `NSScreen.backingScaleFactor` for output sizing; mixed-scale and scaled-resolution behavior remain runtime test obligations.
+## History and Private Capture
 
-## Current Browser Extension Architecture
+`CaptureHistoryStore` is an actor-backed local store under:
 
 ```text
-content.js
-  -> semantic/X candidate with page and viewport rectangles
-  -> if fully visible: versioned native request
-       -> if not accepted: one captureVisibleTab + observed-scale crop
-  -> if taller or partially offscreen: validate + plan bounded slices
-       -> temporarily neutralize page motion and fixed/sticky interference
-       -> for each slice: scroll, settle, request captureVisibleTab, crop at observed scale
-       -> stitch into one local canvas
-       -> restore page scroll and temporary styles
-  -> local PNG download
+~/Library/Application Support/SmartShot/History
 ```
 
-`shared/core.js` supplies rectangle normalization/intersection, URL sanitization, versioned envelopes, semantic kind mapping, bounded slice planning, observed-image-scale pixel crop calculation, output-size validation, destination ranges, and safe filenames. Node tests exercise these pure functions. Background tests exercise the ordered long-capture handshake and rejection after active-tab or document changes.
+Each retained item has a PNG, JPEG thumbnail, and JSON metadata. The UI can list, search, open, delete, and clear history; Settings can disable new history and retain 10, 25, 50, 100, or 250 items. Replacing a flattened capture retains the same history identity.
 
-The extension uses each captured image's actual width/height relative to viewport dimensions when calculating crop pixels; it does not assume `devicePixelRatio` is the capture scale. Browser capture is limited to 24 slices, 20,000 CSS pixels of target height, 16,384 pixels on either output axis, 32,000,000 output pixels, and 20 seconds. Targets wider than the available page viewport, inside nested scroll areas, or rooted in fixed/sticky containers are rejected. Navigation, resize, DOM/geometry changes, user scrolling, active-tab/document changes, and timeouts fail the session instead of returning a partial image.
+Search matches the capture label, an optional saved-file basename, and OCR text only when the separate OCR-index preference is enabled. OCR indexing is off by default, begins only after the user runs OCR, and is never persisted for private captures. Legacy metadata without the newer search fields remains readable.
 
-## Current Safari Target State
+`CapturePostProcessingPolicy` gives Private mode a deliberately narrow meaning: it suppresses automatic history and automatic clipboard copy. The latest preview remains in memory, and explicit Copy, Pin, Save, and Quick Save still work. Private mode also does not control a browser's download fallback.
 
-The Xcode project embeds `SmartShotSafariExtension`, its manifest, scripts, and shared core. `SafariWebExtensionHandler` accepts native extension requests but deliberately returns:
+## Screen Recording Pipeline
 
-```json
-{
-  "accepted": false,
-  "handledBy": "browser"
-}
-```
+`AppModel` serializes screenshots and recordings through one active-operation state. Region recording uses the recording-specific overlay; current-display recording uses the display under the pointer. `RecordingSourceMapper` converts an AppKit global region into one ScreenCaptureKit display-local logical rectangle with a top-left origin. Cross-display and invalid/undersized regions fail before a stream starts.
 
-This proves the target can be compiled, not that Safari DOM candidates reach or control the native app. The native app has no web provider, bridge coordinator, browser window mapper, or DOM coordinate conversion path. The shared extension contains a browser-local whole-block fallback, but the handler response alone does not prove that Safari runs `captureVisibleTab`, local stitching/download, and restoration successfully.
-
-## Target Safari DOM-to-Native Architecture
-
-The following is future design work:
+`ScreenRecordingService` is an actor around a UUID-scoped state machine:
 
 ```text
-Safari DOM viewport CSS rectangle
-  -> versioned native message
-  -> message validation/freshness
-  -> Safari tab and content-viewport mapping
-  -> AppKit global logical rectangle
-  -> CaptureCandidate(source: .webDOM)
-  -> existing overlay/capture pipeline
+idle -> preparing -> recording -> stopping -> finished
+                    \-> cancelled / failed
 ```
 
-### Target Unified Provider Protocol
+`RecordingSourceResolver` obtains live `SCShareableContent`, chooses the requested display, excludes SmartShot, and produces either a full-display filter or a validated region `sourceRect`. `RecordingVideoPlanner` applies the selected 15/30/60 fps and 1,920/2,560/3,840-pixel maximum edge, preserves aspect ratio, and emits even H.264 dimensions.
 
-When the bridge is implemented, providers should converge on the existing `CaptureCandidate` output or a versioned successor:
+An `SCStream` supplies screen frames and optional system audio. `SCStreamConfiguration` can show the pointer and excludes current-process audio. When microphone capture is enabled, `MicrophoneCaptureService` uses a separate `AVCaptureSession`; `RecordingSampleRouter` sends both audio sources and video to `RecordingAssetWriter`. Microphone is off by default and is blocked until macOS permission is granted.
 
-```swift
-protocol CandidateProvider: Sendable {
-    func candidates(at globalPoint: CGPoint) async -> [CaptureCandidate]
-}
+The writer creates a temporary H.264/AAC MOV. Stop ends the stream and microphone, finishes the writer, composes the tracks into an H.264/AAC MP4, validates the exported codecs, cleans intermediates, and moves the MP4 into the Quick Save folder with a collision-safe timestamped name. Cancel, startup failure, runtime failure, and termination use session identity to prevent an older cleanup task from destroying a newer recording.
+
+`ScreenRecordingHUDController` provides non-activating elapsed/Stop/Cancel controls. The main result view uses AVKit and exposes reveal, copy file, Save As, and `GIFExportService`. GIF export samples at most 30 seconds at 15 fps, scales to a 1,280-pixel long edge, writes at most 450 frames, and removes incomplete output on cancellation/failure.
+
+Recording artifacts are ordinary local files, not screenshot-history items. Screenshot Private mode does not suppress recording output. Focused tests cover planning, state, routing, encoding configuration, cleanup, and synthetic offline MP4/GIF export; real ScreenCaptureKit pixels, audio, A/V sync, permissions, sustained duration, and display/sleep changes remain GUI acceptance work.
+
+## Browser Capture and Native Import
+
+### Browser-Side Capture
+
+The Manifest V3 extension selects one semantic DOM block. For X, nested media and quoted-post descendants resolve to the outer `article[data-testid="tweet"]`; sibling replies remain separate, and threads are not combined. Generic pages use layout and semantic ancestors.
+
+Fully visible targets use one `captureVisibleTab` frame and an observed bitmap-to-viewport scale. Taller or partially offscreen targets use at most 24 page slices. The background captures each slice again after 120 ms; the content script downsamples the selected slice to at most 96 pixels on its longest edge and rejects material pixel differences before cropping and stitching one local canvas. This is a fail-closed dynamic-content heuristic, not proof of frozen pixels, and the 20-second budget includes the extra frames. Capture is also bounded to 20,000 CSS pixels of target height, 16,384 pixels per output axis, and 32 million output pixels.
+
+The browser path fails closed for wider-than-viewport targets, nested scrolling, fixed/sticky-rooted selections, navigation, resize, target mutation, manual scroll interference, active-tab/document changes, timeout, or size limits. Scroll position and temporary animation/fixed/sticky styles are restored on success and failure.
+
+### Native Import Protocol
+
+After either browser path has produced a complete PNG, `shared/delivery.js` requests native import. `background.js` validates a `data:image/png;base64,...` URL, estimates decoded size at no more than 64 MiB, sanitizes filename/kind/origin, and sends ordered base64 chunks no larger than 192 KiB:
+
+```text
+capture.import.begin -> ACK(begin)
+capture.import.chunk(index 0...N-1) -> ACK(chunk, same index)
+capture.import.end -> ACK(end)
 ```
 
-Moving current AX/window providers behind this protocol is optional refactoring; it must be justified by the Safari bridge rather than described as already complete.
+Every envelope is versioned and uses the same RFC 4122 request ID. The begin message contains MIME type, encoding, byte/base64 lengths, chunk count, safe filename/kind, `sourceOrigin`, and finite positive logical dimensions. A missing host, rejection, malformed or mismatched acknowledgement, timeout, or interruption first asks the background worker to download the completed PNG. A content-page anchor remains a second fallback when the downloads API is unavailable or rejects the request; a successful background download is never duplicated.
 
-### Target DOM Coordinate Mapping
+Chromium sends messages to the embedded `SmartShotNativeHost`; Safari sends them to `SafariWebExtensionHandler`. Both use `BrowserCaptureImportStore` to validate the protocol, bound image geometry and size, stage files locally, decode the PNG, and reject malformed transfers. This completes phase one, but it is not yet final delivery.
 
-`getBoundingClientRect()` returns CSS pixels relative to the browser viewport. It cannot be passed directly to ScreenCaptureKit. A valid bridge must account for:
+In phase two, the bridge opens `smartshot://import?requestId=...&source=...`. `BrowserCaptureImportService` consumes the completed artifact, validates logical dimensions and image aspect, creates a `CapturedImage`, and passes it through the same editor and post-processing path as a native capture. The bridge returns an accepted end acknowledgement only after the app completes that work. Launch failure, app rejection, a ten-second timeout, or termination rejects and cleans the transfer so the browser can keep its completed-download fallback.
 
-- Safari content viewport origin inside its native window.
-- Window position on the macOS desktop.
-- Page zoom, `devicePixelRatio`, and `visualViewport` metrics.
-- Toolbar/full-screen changes.
-- Display scale and negative display origins.
-- Stale messages after scroll, resize, navigation, or tab changes.
+`BrowserCaptureImportQueue` permits exactly one outstanding request, counting active and pending work. A second overlapping import is rejected instead of being queued to overwrite the sole latest-preview slot. Duplicate and completed request IDs are handled idempotently.
 
-If the mapping cannot be established reliably, the app must decline the DOM candidate and retain AX/window/manual fallback.
+Chromium keeps its completed phase-one artifact in the bounded Application Support store until app consumption. Safari cannot share that private container with the containing app, so the handler consumes its store artifact and publishes the PNG/metadata plus app acknowledgement through UUID-named `NSPasteboard` instances. Both sides revalidate request identity, metadata, size, PNG, and acknowledgement state, and normal success, rejection, and timeout paths clean up the boards.
 
-### Target Message Boundary
+This is an image-import architecture, not DOM-CSS-to-AppKit coordinate mapping.
 
-Future native messages must be versioned, bounded, fresh, and treated as untrusted input. Allowed data should be limited to candidate geometry, semantic kind, viewport/session data, and an optional sanitized HTTP(S) URL. Post text, author labels, page titles, selectors, cookies, credentials, complete HTML, and browsing history are unnecessary for capture.
+### Browser Privacy Boundary
+
+Native import contains PNG bytes plus a safe filename/kind, logical dimensions, and sanitized HTTP(S) origin. It does not include post text, author, page title, selector, HTML, URL credentials/path/query/fragment, cookies, or browsing history. The extension contains no analytics, upload endpoint, remote font, `fetch`, or `XMLHttpRequest` use.
+
+Named pasteboards are a current P2 transport boundary: they do not cryptographically authenticate the writer against another process running as the same logged-in user, and an extension crash after publication can leave bounded request-scoped residue beyond the normal cleanup path. The UUID request name, strict validation, size limits, one-outstanding queue, timeout, and fail-closed fallback reduce exposure but do not turn the channel into authenticated IPC. A future hardened distribution should use an authenticated shared channel such as a correctly provisioned App Group plus an application-level integrity/authentication design.
 
 ## Permissions and Degraded Modes
 
-### Current
+| Capability | Required permission or setup | Degraded behavior |
+| --- | --- | --- |
+| Native screenshot pixels | Screen Recording | Capture fails with recovery guidance. |
+| AX semantic candidates | Accessibility | Window and manual region selection remain available. |
+| Manual Long | Screen Recording | No Accessibility dependency. |
+| Automatic App Scroll | Screen Recording + Accessibility + writable AX scrollbar | The automatic path is unavailable; Manual Long remains the fallback. |
+| Safari DOM selection/import | Enabled extension + Website Access + signed containing app + extension `downloads` permission | Native AX/window/manual paths remain available; failed import downloads in the browser when the API or source page remains available. |
+| Chromium native import | Complete `/Applications/SmartShot.app`, installed host manifest, loaded pinned extension + extension `downloads` permission | Capture can still fall back to a browser download. |
+| OCR | Current captured image | No extra permission; processing is local. |
+| Region/display recording | Screen Recording | Recording cannot start; screenshot settings/recovery remain available. |
+| Recording microphone | Microphone, only when enabled | Video and optional system audio remain available when microphone is off. |
 
-- Screen Recording is mandatory for native pixel capture.
-- Accessibility improves native block selection but is not required for window/manual selection.
-- Accessibility is mandatory for native **Automatic App Scroll (Experimental)** because it requires a writable AX scrollbar. Manual Long requires only Screen Recording.
-- The app presents Screen Recording and Accessibility state/recovery controls.
+The project has no analytics, account, cloud synchronization, or runtime screenshot-upload client. History is local and enabled by default, so it is incorrect to describe all screenshot bytes as memory-only.
 
-### Experimental/Target
-
-- Safari extension enablement and website access are required for the browser-local DOM path as well as any future native bridge; the browser-local path is implemented but still GUI-unverified in Safari.
-- Because the native bridge is not implemented or GUI-verified, Safari permission recovery must not be described as a completed native workflow.
-
-## Privacy and Security
-
-- The native paths and current browser capture/stitch paths are local.
-- SmartShot does not require a runtime network client for current capture behavior.
-- Screenshot buffers remain in memory unless explicitly saved.
-- Extension data is untrusted and must not be logged as page content.
-- Current and future code should reject invalid/non-finite rectangles before capture.
-- A future bridge must enforce schema version, message size, candidate count, string length, page/session identity, and recency.
+The current local release is self-signed rather than Developer ID signed and notarized. Gatekeeper may quarantine or block a downloaded copy pending explicit user approval. This distribution boundary is separate from code-signing success, TCC state, and runtime GUI acceptance.
 
 ## Current Module Map
 
 ```text
 Sources/SmartShotApp
-  SmartShotApp.swift
-  Overlay/
-  Services/AccessibilityScrollCaptureTarget.swift
-  Services/AppModel.swift
-  Services/GlobalShortcutMonitor.swift
-  Services/PermissionService.swift
+  Editing/                         editor coordination
+  Overlay/                         unified selection and input mapping
+  Recording/                       recording source, stream, writer, export, and cleanup
+  Services/AppModel.swift          application coordinator
   Services/ScreenCaptureService.swift
+  Services/ManualScrollingCaptureService.swift
   Services/ScrollingCaptureService.swift
-  Views/MainView.swift
+  Services/TextRecognitionService.swift
+  Services/CaptureHistoryStore.swift
+  Services/CaptureOutputService.swift
+  Services/BrowserCaptureImportService.swift
+  Services/ChromiumNativeMessagingInstaller.swift
+  Views/                            main UI, settings, preview, HUDs, pinned panels
 
 Sources/SmartShotCore
-  Accessibility/
-  Capture/CandidateFilter.swift
-  Capture/ScreenGeometry.swift
-  Capture/WindowCandidateProvider.swift
-  LongCapture/
-  Models/CaptureCandidate.swift
+  Accessibility/                   AX hierarchy and screen mapping
+  Capture/                         candidates and geometry
+  Editing/                         edit document and raster renderer
+  LongCapture/                     overlap, fixed-top detection, stitching
+  Shortcut/                        persisted shortcut value
 
-Sources/SmartShotSafariExtension
-  SafariWebExtensionHandler.swift
-
-BrowserExtension
-  background.js
-  content.js
-  shared/core.js
-  tests/background.test.js
-  tests/core.test.js
+Sources/SmartShotBrowserBridge      strict staged import store/protocol
+Sources/SmartShotNativeHost         Chromium native-messaging executable
+Sources/SmartShotSafariExtension    Safari handler
+Sources/SmartShotCommand            URL/CLI command model and parser
+Sources/SmartShotCLI                embedded launcher executable
+BrowserExtension                    WebExtension scripts, shared helpers, Node tests
 ```
 
-## Known Architectural Gaps
+## Known Architectural Boundaries
 
-| Gap | Status |
+| Area | Current status |
 | --- | --- |
-| Safari DOM candidate accepted by native app | Not implemented; handler returns `accepted: false`. |
-| Safari DOM CSS-to-AppKit coordinate mapping | Not implemented. |
-| Real Safari/X extension GUI verification | Not performed. |
-| Browser DOM whole-block capture | Implemented and automated-tested; real Chrome/Safari + X E2E not performed. |
-| Native `Automatic App Scroll (Experimental)` | Implemented with bounded AX/static/single-display scope; controlled runtime evidence recorded. |
-| User-configurable shortcut | Implemented with validation, Carbon conflict rollback, persistence, and Restore Default. |
-| Post-capture crop and annotation editor | Implemented; final GUI rendering is exercised with a deterministic Debug fixture. |
-| General-purpose long screenshot across dynamic/infinite/virtualized/nested/cross-display content | Not implemented or promised. |
-| Recording and OCR | Not implemented and outside v0.1. |
-| Privileged real-device permission/display matrix | Outstanding verification work. |
-| AX timeout/cancellation isolation | Future hardening. |
+| Native Smart/Region and manual Long | Implemented with deterministic coverage and narrow installed-app Smart, Region, and Manual Long GUI evidence; broad display/permission matrix pending. |
+| Automatic App Scroll | Implemented for bounded static AX scroll areas; one controlled success and forced-timeout restoration run recorded. |
+| Browser single-block/X single-post capture | Implemented with Node fixtures and native protocol/store tests; real signed Chrome/Safari + current X GUI pending. |
+| Browser app handoff | Two-phase delivery with one outstanding import; Safari named-pasteboard source authentication and crash residue remain documented P2 boundaries. |
+| Editor/OCR/history/private/output | Implemented with focused automated coverage and a narrow signed GUI subset; expanded GUI and persistence acceptance pending. |
+| URL scheme and bundled CLI | Implemented with parsing/round-trip coverage and installed non-activating capture/Quick Save plus activating Show checks; the complete matrix remains pending. |
+| Region/current-display screen recording | Implemented with focused component/offline-export coverage and one live region/video-only MP4/preview/Save As/GIF check; current-display/audio and the broader GUI matrix remain pending. |
+| General dynamic/infinite/virtualized/nested/cross-display long capture | Not implemented or promised. |
+| Automatic X thread/multiple-post capture | Not implemented. |
+| Mixed-display capture composition | Not implemented. |
+| Privileged permission, full-screen, browser-install, and mixed-scale matrix | Outstanding acceptance work. |
+| Gatekeeper distribution | Current local artifact is self-signed and not notarized; Developer ID/notarization and clean-machine acceptance remain future release work. |

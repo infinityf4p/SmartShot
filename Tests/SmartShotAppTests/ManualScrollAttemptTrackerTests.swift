@@ -65,6 +65,22 @@ final class ManualScrollAttemptTrackerTests: XCTestCase {
         )
     }
 
+#if DEBUG
+    func testDebugCaptureSessionGateRejectsSupersededAndInvalidatedSessions() {
+        var gate = DebugCaptureSessionGate()
+        let first = gate.begin()
+
+        XCTAssertTrue(gate.contains(first))
+
+        let second = gate.begin()
+        XCTAssertFalse(gate.contains(first))
+        XCTAssertTrue(gate.contains(second))
+
+        gate.invalidate()
+        XCTAssertFalse(gate.contains(second))
+    }
+#endif
+
     private func sample(
         location: CGPoint = CGPoint(x: 100, y: 100),
         verticalDelta: Double = 8,

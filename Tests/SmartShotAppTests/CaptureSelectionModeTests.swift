@@ -3,7 +3,7 @@ import XCTest
 
 final class CaptureSelectionModeTests: XCTestCase {
     func testUnifiedToolbarKeepsExpectedModeOrder() {
-        XCTAssertEqual(CaptureSelectionMode.allCases, [.smart, .region, .long])
+        XCTAssertEqual(CaptureSelectionMode.allCases, [.smart, .region, .long, .appScroll])
     }
 
     func testEveryModeHasDistinctPresentationAndAccessibleHelp() {

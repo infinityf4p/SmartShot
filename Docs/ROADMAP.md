@@ -1,132 +1,123 @@
 # SmartShot Roadmap
 
-## Current Baseline: v0.1 Native MVP
+## Current Baseline
 
-Implemented baseline as of 2026-08-19:
+Implemented in the current checkout as of 2026-08-24:
 
-- Native macOS 14+ SwiftUI/AppKit app.
-- Configurable global capture shortcut with built-in launch fallback, conflict rollback, persistence, visible status, and retry.
-- Non-activating selection overlays in other applications' full-screen Spaces.
-- AX, visible-window, and manual visible-region candidates.
-- Multi-display selection overlay and candidate cycling.
-- ScreenCaptureKit still capture.
-- One shortcut and overlay for Smart, Region, and manual Long modes.
-- Bounded manual long capture with stable-frame sampling, automatic bottom detection after a no-movement scroll attempt, fixed-top handling, and seam verification.
-- Post-capture crop, arrows, rectangles, text, mosaic, numbered markers, undo/redo, zoom, pasteboard copy, pin-to-screen, and PNG save.
-- Optional 0/3/5-second capture delay.
-- Screen Recording and Accessibility permission UI.
-- Embedded Safari WebExtension target that builds.
-- Manifest V3 extension with semantic/X selection.
-- Browser DOM whole-block capture with one-frame fast path, bounded page scrolling, observed-scale slice crops, local stitching, and restoration; real Chrome/Safari + X E2E remains outstanding.
-- Native **Automatic App Scroll (Experimental)** for a static, single-display AX scroll area with a writable vertical scrollbar; overlap/stitching tests and a controlled privileged success/timeout-restoration run are recorded.
-- Native and extension unit coverage described in `TEST_PLAN.md`.
+- Unified Smart, Region, manual Long, and App Scroll selector with Escape cancellation and nested cycling.
+- Configurable persisted Carbon shortcut with conflict rollback.
+- ScreenCaptureKit still capture, AX/window/manual candidates, delay, pin, copy, Save, and Quick Save.
+- Bounded manual Long and native Automatic App Scroll (Experimental).
+- Expanded local editor: select/move/delete, crop, freehand, arrow, rectangle, ellipse, text, counter, mosaic, blur, opaque redaction, spotlight, and magnifier.
+- On-device Vision OCR, text copy, supported sensitive-pattern detection, and OCR-assisted redaction.
+- Local capture history with retention, search, open/delete/clear/replace, and an off-by-default OCR index.
+- Private capture policy that suppresses automatic history and automatic copy.
+- PNG/JPEG output, naming choices, and configurable Quick Save directory.
+- Public capture/Quick Save/Show URL routes and an embedded fire-and-forget CLI.
+- Browser semantic single-block capture, including X single-post fixtures, bounded browser scrolling/stitching with heuristic two-frame slice checks, Chromium/Safari two-phase native PNG import, one-outstanding app admission, background-owned download fallback, and Safari status/settings entry points.
+- User-visible single-display/region recording with system audio, optional microphone, pointer/frame-size settings, H.264/AAC MP4 output, preview/file actions, and bounded GIF export.
 
-Not in the baseline:
+The current automated gates pass 199/199 Swift/XCTest and 67/67 browser Node tests. Automated coverage is not a substitute for the remaining signed GUI and real-browser acceptance work.
 
-- General-purpose long capture for dynamic/infinite/virtualized/nested/cross-display content.
-- Recording.
-- OCR.
-- Advanced editing such as freehand drawing, blur, object removal, and semantic redaction.
+## Milestone 1: Stabilize the Current Native Product
 
-The next native priority is runtime verification on real display and permission configurations, not feature expansion.
+Outcome: make implemented native screenshot workflows evidence-backed.
 
-## Milestone 1: Native Runtime Hardening
+- Complete Screen Recording and Accessibility denial/grant/revoke recovery.
+- Record frontmost-app shortcut delivery and custom shortcut behavior across keyboard layouts.
+- Verify overlays and cancellation in full-screen Spaces, Mission Control, lock/unlock, and repeated rapid use.
+- Complete Retina, 1x/2x mixed-scale, negative-origin, display-change, and cross-display-boundary cases.
+- Verify AX/window/manual capture edges and SmartShot-window exclusion from a signed installed build.
+- Exercise PNG/JPEG Save, Quick Save, overwrite avoidance, cancellation, unwritable destinations, Copy, Pin, and Flatten.
+- Verify termination while countdown, manual Long, automatic scrolling, browser import, and history writes are active.
 
-Outcome: turn implemented native paths into evidence-backed support claims.
+Exit gate: no known stuck-input, wrong-display, captured-overlay, destructive-output, or permission-recovery defect in the recorded matrix.
 
-- Complete Retina, mixed-scale, negative-origin, and cross-display tests.
-- Verify Screen Recording and Accessibility denial/recovery on current macOS.
-- Verify AX/window/manual selection and overlay teardown under repeated use.
-- Verify the complete crop/annotation matrix plus copy, pin, PNG save, and save failure/cancellation from a signed build.
-- Expand native **Automatic App Scroll (Experimental)** evidence beyond the completed controlled success/timeout-restoration run to cancellation, hard-limit, restoration-failure, and real-application cases.
-- Verify default, fallback, retry, and foreground delivery with real keyboard input and competing apps.
-- Verify shortcut recording and persistence across keyboard input sources on signed builds.
-- Move potentially slow AX work behind measured cancellation/timeout boundaries if required.
-- Record a compatibility matrix with exact macOS/hardware evidence.
+## Milestone 2: Browser Installation and X Acceptance
 
-Exit gate: no known stuck-input, wrong-display, captured-overlay, or privacy defect in the tested matrix.
+Outcome: promote the implemented browser bridge from automated evidence to a real compatibility statement.
 
-## Milestone 2: Safari DOM-to-Native Bridge
+Recorded on 2026-08-24: a byte-identical universal Release app is installed at `/Applications/SmartShot.app`; all embedded executables passed strict deep signature verification; Chromium manifests validate for detected browsers; and stale Safari registrations were reduced to the single installed extension. These are artifact/setup results only. The protected browser enablement and end-to-end capture items below remain open.
 
-Outcome: make Safari semantic blocks real native capture candidates.
+- Package and install the current complete app at `/Applications/SmartShot.app`.
+- Verify helper executability and Chromium manifests for Chrome, Chromium, Edge, and Brave.
+- Use Chromium's user-controlled Developer mode / **Load unpacked** UI to load the pinned unpacked extension and verify its expected ID.
+- For the current self-signed build, enable Safari's per-process unsigned-extension development override, enable the embedded extension, and test Website Access denial/recovery. Verify the override resets after Safari quits; remove this development dependency through proper distribution signing.
+- Run visible and tall controlled fixtures through native preview and forced download fallback.
+- Verify phase-two app acceptance, a second overlapping import rejection, termination, and ten-second timeout cleanup without replacing the active preview.
+- Run public X timeline/detail cases for text, media, quoted posts, replies/reposts, logged-out state, light/dark mode, and current DOM changes.
+- Cover page zoom, window movement, full screen, navigation, tab changes, mutation, dynamic pixels, fixed/sticky content, nested scroll, timeout, and hard limits.
+- Record exact browser/macOS/build versions, output dimensions, restoration, and non-sensitive seam evidence.
+- Exercise Safari named-pasteboard cleanup after success, rejection, timeout, and forced extension termination; retain same-user source authentication and crash residue as explicit P2 boundaries until the transport is hardened.
 
-- Replace the handler's unconditional `accepted: false` response with validated routing.
-- Add a session-aware native message decoder.
-- Map Safari DOM CSS rectangles through browser content coordinates into AppKit global points.
-- Reject stale candidates after scroll, resize, navigation, or tab changes.
-- Feed accepted DOM candidates into the existing selection/capture pipeline.
-- Preserve AX/window/manual fallback when the extension or mapping is unavailable.
-- Verify Safari extension enablement and site-access recovery.
-- Run the Safari zoom/window/display matrix in `TEST_PLAN.md`.
+This milestone supports one post only. Automatic threads, multiple posts, dynamic/infinite feeds, and virtualized lists remain excluded.
 
-Until this exit gate passes, Safari DOM integration remains Experimental.
+## Milestone 3: Editor, OCR, History, and Privacy Acceptance
 
-## Milestone 3: X Single-Post Hardening
+Outcome: verify the new local workflow as users experience it.
 
-Outcome: promote browser-local X-post whole-block capture only after real-site evidence, while keeping the native-preview bridge as a separate gate.
+- Exercise every editing tool, selection/movement/deletion, undo/redo/reset, zoom, and render-cache invalidation.
+- Confirm magnifier output cannot reveal pixels hidden by opaque redaction.
+- Test Vision OCR on controlled multilingual, Retina, long, rotated, low-contrast, and no-text images.
+- Verify reading order, copy, redact-all, sensitive-only redaction, false positives, and false negatives.
+- Confirm private captures create neither a history item nor automatic clipboard content while explicit actions remain available.
+- Restart the app and verify history ordering, thumbnails, search, open/delete/confirmed-clear, retention changes, corrupted-entry recovery, and Flatten replacement.
+- Verify label and saved-file-basename searches independently from OCR-index searches.
+- Verify OCR search requires explicit opt-in and an OCR run, never indexes private captures, removes an older index when a capture is replaced without one, and explains its local storage boundary.
 
-- Replace dependence on `article[data-testid="tweet"]` as the sole special-case signal with multiple semantic signals.
-- Add sanitized fixture coverage for text, media, quoted posts, replies/reposts, timelines, detail pages, localization, and DOM changes.
-- Test current public X in Chrome and Safari without publishing private timeline evidence.
-- Confirm one-frame behavior for a visible post and bounded scrolling/stitching for a post taller than the viewport.
-- Verify seam quality, fixed/sticky handling, page restoration, tab/navigation/mutation errors, and all capture limits.
-- Document sticky overlays, dynamic media, login state, and site-change limitations.
+Exit gate: storage and privacy wording matches observed files and clipboard behavior.
 
-This milestone still does not include automatic X thread/multi-post capture and does not promise dynamic/infinite/virtualized content.
+## Milestone 4: Automation Acceptance
 
-## Milestone 4: Workflow Enhancements
+Outcome: make URL and CLI commands dependable for local workflows.
 
-Candidates after native and Safari correctness are established:
+- Verify LaunchServices registration from a signed `/Applications` build.
+- Exercise every capture mode through `open smartshot://...` and the bundled CLI.
+- Verify capture requests received during another active operation are ignored or queued according to the documented contract.
+- Verify Quick Save with and without a latest capture, configured PNG/JPEG output, filename collisions, and folder failures.
+- Decide whether the CLI remains fire-and-forget or gains a separate authenticated IPC/result protocol.
+- If exposing the CLI on `PATH`, add an explicit installer/uninstaller rather than implying it is already installed.
 
-- Local history with explicit retention controls.
-- Output naming and appearance presets.
-- Shortcuts, URL scheme, or CLI automation.
-- Optional source metadata export with explicit privacy controls.
+## Milestone 5: Recording Acceptance and Hardening
 
-Extend the existing editor only after capture correctness remains stable; history and output presets are separate workflow features.
+Outcome: promote the implemented recording workflow from focused automated evidence to a dependable runtime feature.
 
-## Research Track: Long-Capture Hardening
+- Verify region and current-display selection, countdown, elapsed HUD, Stop, Cancel, failure, and termination from the main window, menu commands, and menu bar.
+- Verify H.264 video plus system audio and optional microphone as AAC, including A/V sync, cursor on/off, 15/30/60 fps, and each maximum-edge setting.
+- Exercise microphone not-determined/denied/granted/revoked states and Screen Recording recovery without misleading permission status.
+- Verify SmartShot controls and current-process audio are excluded as promised.
+- Test dropped frames, long duration, sleep/wake, display removal/change, encoder failure, low disk space, and temporary-file cleanup.
+- Verify MP4 persistence, in-app preview, reveal/copy/Save As, filename collisions, and unwritable Quick Save destinations.
+- Verify GIF cancellation and the 30-second, 15-fps, 1,280-pixel, 450-frame limits.
+- Keep camera, click visualization, trimming, presets, and general video editing as later product decisions.
 
-Three bounded paths now exist: manual Long, browser DOM whole-block capture, and native **Automatic App Scroll (Experimental)**. None is evidence of general-purpose long-screenshot compatibility.
+Component and synthetic media-export tests do not satisfy this runtime milestone.
 
-Research questions:
+## Long-Capture Research
 
-- Can DOM segments remain stable during automated scrolling?
-- Can layout, lazy media, sticky elements, and animation be reconciled without missing or duplicate seams?
-- Can SmartShot cancel safely and restore the original scroll position?
-- Can it distinguish a visible-only capture from a complete long capture without ambiguity?
-- Which applications expose a stable, writable vertical AX scrollbar and static pixels suitable for the native path?
-- Can virtualized, nested, infinite, or cross-display content ever meet a deterministic support contract?
+The three bounded paths remain separate contracts:
 
-Only the current bounded contracts may be claimed. Promotion requires controlled fixtures and real-site/application cases demonstrating repeatable stitching and restoration; unsupported categories remain excluded until separately designed and verified.
+- Manual Long: user-driven fixed rectangle.
+- Automatic App Scroll: app-driven AX scrollbar with restoration.
+- Browser whole block: DOM-defined element with browser page restoration.
 
-## Separate Future Tracks
+Research remains for repeated/low-texture content, dynamic media, changing sticky headers, virtualized rows, nested scroll containers, horizontal content, and multiple displays. Unsupported content must fail rather than produce a plausible but incomplete image.
 
-### OCR and Privacy Assistance
+## Later Product Tracks
 
-- On-device Vision OCR.
-- Searchable local history.
-- Sensitive-pattern detection.
-- Irreversible redaction.
-- Explicit translation provider/privacy design.
-
-### Recording
-
-- ScreenCaptureKit video.
-- System audio, microphone, camera, cursor/click display, trimming, and GIF export.
-
-### Advanced Editing
-
-- Freehand drawing, blur, additional shapes, object removal, and irreversible redaction.
-
-These tracks need separate architecture and tests. Basic crop, arrow, rectangle, text, mosaic, and numbered-marker editing is already part of the current baseline.
+- Translation with an explicit provider and privacy design.
+- Object removal and pixel-content editing.
+- Safe local metadata/export controls and optional advanced history filters.
+- Optional cloud sharing only with a separate account, retention, encryption, and abuse model.
+- Developer ID signing, notarization, clean-machine Gatekeeper acceptance, updates, and crash diagnostics with opt-in privacy controls.
+- Replace or harden Safari named-pasteboard transfer with an authenticated shared channel when provisioning supports it; include migration and stale-artifact cleanup.
 
 ## Prioritization Rules
 
-1. Fix wrong-region, wrong-display, privacy, crash, and stuck-input defects first.
-2. Prefer a reliable manual/window fallback over an inaccurate smart detector.
-3. Separate code presence, automated evidence, GUI runtime proof, and roadmap intent.
-4. Keep site-specific detectors isolated and fixture-tested.
-5. Do not market a building target as a working integration.
-6. Add permissions only for an implemented user-visible capability.
-7. Keep current capture local and retention explicit.
+1. Fix wrong pixels, wrong display, privacy leakage, destructive output, crashes, and stuck input first.
+2. Prefer a reliable manual fallback over an inaccurate smart result.
+3. Keep implementation, automated evidence, GUI evidence, and product claims separate.
+4. Keep site-specific logic fixture-tested and bounded.
+5. Never promote a configured connector or building target as a completed workflow.
+6. Add permissions only when a user-visible capability and recovery path exist.
+7. Keep local retention explicit and private-mode behavior precise.

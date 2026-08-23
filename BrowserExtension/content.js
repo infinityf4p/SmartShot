@@ -6,12 +6,9 @@
 
   const extensionApi = globalThis.browser || globalThis.chrome;
   const Core = globalThis.SmartShotCore;
-  const BLOCK_TAGS = new Set([
-    "article", "aside", "blockquote", "dd", "details", "div", "dl", "dt",
-    "figure", "figcaption", "footer", "form", "header", "li", "main", "nav",
-    "ol", "p", "pre", "section", "table", "tbody", "td", "th", "thead", "tr", "ul"
-  ]);
-  const SEMANTIC_ROLES = new Set(["article", "group", "listitem", "main", "region"]);
+  const Selection = globalThis.SmartShotSelection;
+  const CaptureGuards = globalThis.SmartShotCaptureGuards;
+  const Delivery = globalThis.SmartShotDelivery;
   const state = {
     active: false,
     host: null,
@@ -22,6 +19,7 @@
     pointer: { x: 0, y: 0 },
     framePending: false,
     capturing: false,
+    captureController: null,
     previousCursor: { value: "", priority: "" }
   };
 
@@ -39,80 +37,21 @@
   }
 
   function rectFor(element) {
-    const rect = element.getBoundingClientRect();
-    return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
-  }
-
-  function hasUsableRect(element) {
-    const rect = rectFor(element);
-    if (rect.width < 32 || rect.height < 18) return false;
-    const style = getComputedStyle(element);
-    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0;
-  }
-
-  function isSemantic(element) {
-    const tag = element.localName;
-    const role = (element.getAttribute("role") || "").toLowerCase();
-    return tag === "article" || tag === "main" || tag === "section" || SEMANTIC_ROLES.has(role);
-  }
-
-  function isLayoutBlock(element) {
-    if (!(element instanceof Element) || !hasUsableRect(element)) return false;
-    if (BLOCK_TAGS.has(element.localName)) return true;
-    const display = getComputedStyle(element).display;
-    return display === "block" || display === "flex" || display === "grid" || display === "flow-root";
-  }
-
-  function descriptor(element) {
-    return {
-      tagName: element.localName,
-      role: element.getAttribute("role") || "",
-      testId: element.getAttribute("data-testid") || ""
-    };
+    return Selection.rectFor(element);
   }
 
   function kindFor(element) {
-    return Core.kindFromDescriptor(descriptor(element));
-  }
-
-  function substantiallyLarger(element, previous) {
-    if (!previous) return true;
-    const nextRect = rectFor(element);
-    const previousRect = rectFor(previous);
-    const nextArea = nextRect.width * nextRect.height;
-    const previousArea = previousRect.width * previousRect.height;
-    return nextRect.width >= previousRect.width + 6 ||
-      nextRect.height >= previousRect.height + 6 ||
-      nextArea >= previousArea * 1.08;
+    return Core.kindFromDescriptor(Selection.descriptor(element));
   }
 
   function candidateChainAt(x, y) {
     let leaf = document.elementFromPoint(x, y);
     if (!leaf || leaf === state.host) return [];
-    if (leaf.nodeType !== Node.ELEMENT_NODE) leaf = leaf.parentElement;
-
-    const ancestry = [];
-    for (let element = leaf; element && element !== document.documentElement; element = element.parentElement) {
-      ancestry.push(element);
-    }
-
-    const xPost = leaf.closest('article[data-testid="tweet"]');
-    // X posts are intentional product-level blocks. Generic pages start at the
-    // nearest layout block so the user can climb into article/section/main.
-    let base = xPost && hasUsableRect(xPost) ? xPost : ancestry.find(isLayoutBlock);
-    if (!base) return [];
-
-    const baseIndex = ancestry.indexOf(base);
-    const chain = [];
-    for (let index = baseIndex; index < ancestry.length; index += 1) {
-      const element = ancestry[index];
-      if (!isLayoutBlock(element) && !isSemantic(element)) continue;
-      if (!hasUsableRect(element)) continue;
-      if (!substantiallyLarger(element, chain[chain.length - 1])) continue;
-      chain.push(element);
-      if (chain.length === 10) break;
-    }
-    return chain;
+    return Selection.candidateChainFromLeaf(leaf, {
+      documentElement: document.documentElement,
+      overlayHost: state.host,
+      getComputedStyle
+    });
   }
 
   function metadataFor(_element, kind) {
@@ -212,6 +151,26 @@
       event.stopImmediatePropagation();
       shiftLevel(-1);
     }
+  }
+
+  function cancelCapture(message = "Capture cancelled.") {
+    if (state.captureController) state.captureController.cancel(message);
+  }
+
+  function onCaptureKeyDown(event) {
+    if (!state.capturing || event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    cancelCapture();
+  }
+
+  function onPageLifecycleExit() {
+    if (state.active) stop();
+    cancelCapture("Capture stopped because the page became inactive.");
+  }
+
+  function onVisibilityChange() {
+    if (document.hidden) onPageLifecycleExit();
   }
 
   function onClick(event) {
@@ -338,124 +297,46 @@
   }
 
   function closeEnough(first, second, tolerance = 2) {
-    return Math.abs(first - second) <= tolerance;
+    return CaptureGuards.closeEnough(first, second, tolerance);
   }
 
   function assertStandardVisualViewport() {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    if (!closeEnough(viewport.scale, 1, 0.01) ||
-        !closeEnough(viewport.offsetLeft, 0, 0.5) ||
-        !closeEnough(viewport.offsetTop, 0, 0.5)) {
-      throw new Error("Reset page pinch zoom before starting a long capture.");
-    }
+    CaptureGuards.assertStandardVisualViewport(window);
   }
 
   function assertStableTarget(element, expectedRect, expectedURL, expectedViewport, targetMutated) {
-    if (location.href !== expectedURL) throw new Error("Capture stopped because the page navigated.");
-    if (!element.isConnected) throw new Error("Capture stopped because the selected block left the page.");
-    if (targetMutated()) throw new Error("Capture stopped because the selected block changed while scrolling.");
-    if (!closeEnough(window.innerWidth, expectedViewport.width, 0.5) ||
-        !closeEnough(window.innerHeight, expectedViewport.height, 0.5)) {
-      throw new Error("Capture stopped because the browser viewport changed.");
-    }
-    assertStandardVisualViewport();
-    const current = pageRectFor(element);
-    if (!closeEnough(current.x, expectedRect.x) ||
-        !closeEnough(current.y, expectedRect.y) ||
-        !closeEnough(current.width, expectedRect.width) ||
-        !closeEnough(current.height, expectedRect.height)) {
-      throw new Error("Capture stopped because the selected block changed while scrolling.");
-    }
-  }
-
-  function setTemporaryStyle(changes, element, property, value) {
-    changes.push({
+    CaptureGuards.assertStableTarget({
       element,
-      property,
-      value: element.style.getPropertyValue(property),
-      priority: element.style.getPropertyPriority(property)
+      expectedRect,
+      expectedURL,
+      expectedViewport,
+      targetMutated,
+      currentURL: () => location.href,
+      view: window,
+      rectFor,
+      normalizeRect: Core.normalizeRect
     });
-    element.style.setProperty(property, value, "important");
-  }
-
-  function assertWindowScrollableTarget(target) {
-    for (let ancestor = target.parentElement; ancestor && ancestor !== document.documentElement; ancestor = ancestor.parentElement) {
-      const style = getComputedStyle(ancestor);
-      const canScrollY = /(auto|scroll|overlay)/.test(style.overflowY) &&
-        ancestor.scrollHeight > ancestor.clientHeight + 1;
-      const canScrollX = /(auto|scroll|overlay)/.test(style.overflowX) &&
-        ancestor.scrollWidth > ancestor.clientWidth + 1;
-      if (canScrollX || canScrollY) {
-        throw new Error("A block inside a nested scroll area cannot be scrolling-captured reliably.");
-      }
-    }
   }
 
   function prepareCaptureEnvironment(target) {
-    assertWindowScrollableTarget(target);
-    const elements = Array.from(document.querySelectorAll("*"));
-    if (elements.length > Core.CAPTURE_LIMITS.maxStyleNodes) {
-      throw new Error("The page is too large to freeze safely for a long capture.");
-    }
-
-    const changes = [];
-    const freezeStyle = document.createElement("style");
-    freezeStyle.textContent = `
-      *, *::before, *::after {
-        animation-play-state: paused !important;
-        caret-color: transparent !important;
-        scroll-behavior: auto !important;
-        transition-duration: 0s !important;
-        transition-delay: 0s !important;
-      }
-      html { overflow-anchor: none !important; scroll-behavior: auto !important; }
-    `;
-    document.documentElement.append(freezeStyle);
-
-    try {
-      for (const element of elements) {
-        const position = getComputedStyle(element).position;
-        if (position !== "fixed" && position !== "sticky") continue;
-
-        if (element === target || element.contains(target)) {
-          throw new Error("A block inside a fixed or sticky container cannot be scrolling-captured reliably.");
-        }
-        if (!target.contains(element) || position === "fixed") {
-          setTemporaryStyle(changes, element, "visibility", "hidden");
-          continue;
-        }
-
-        setTemporaryStyle(changes, element, "position", "relative");
-        for (const edge of ["top", "right", "bottom", "left"]) {
-          setTemporaryStyle(changes, element, edge, "auto");
-        }
-      }
-    } catch (error) {
-      for (const change of changes.reverse()) {
-        if (change.value) change.element.style.setProperty(change.property, change.value, change.priority);
-        else change.element.style.removeProperty(change.property);
-      }
-      freezeStyle.remove();
-      throw error;
-    }
-
-    return () => {
-      for (const change of changes.reverse()) {
-        if (change.value) change.element.style.setProperty(change.property, change.value, change.priority);
-        else change.element.style.removeProperty(change.property);
-      }
-      freezeStyle.remove();
-    };
+    return CaptureGuards.prepareCaptureEnvironment({
+      target,
+      document,
+      getComputedStyle,
+      maximumStyleNodes: Core.CAPTURE_LIMITS.maxStyleNodes
+    });
   }
 
-  async function scrollAndSettle(x, y, deadline) {
+  async function scrollAndSettle(x, y, deadline, cancellation) {
+    cancellation.throwIfCancelled();
     window.scrollTo(x, y);
     for (let frame = 0; frame < 10; frame += 1) {
       assertBeforeDeadline(deadline);
       await new Promise((resolve) => requestAnimationFrame(resolve));
+      cancellation.throwIfCancelled();
       if (closeEnough(window.scrollX, x, 1) && closeEnough(window.scrollY, y, 1)) {
         await nextPaint();
+        cancellation.throwIfCancelled();
         return;
       }
     }
@@ -463,9 +344,7 @@
   }
 
   function assertScrollPosition(x, y) {
-    if (!closeEnough(window.scrollX, x, 1) || !closeEnough(window.scrollY, y, 1)) {
-      throw new Error("Capture stopped because the page was scrolled during a capture slice.");
-    }
+    CaptureGuards.assertScrollPosition(window, x, y);
   }
 
   function loadImage(dataUrl) {
@@ -475,6 +354,39 @@
       image.onerror = () => reject(new Error("The captured browser image could not be decoded."));
       image.src = dataUrl;
     });
+  }
+
+  function sampledPixels(image, source) {
+    const sampleSize = CaptureGuards.verificationSampleSize(source.width, source.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = sampleSize.width;
+    canvas.height = sampleSize.height;
+    const context = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
+    if (!context) throw new Error("The browser could not verify capture pixels.");
+    context.imageSmoothingEnabled = true;
+    context.drawImage(
+      image,
+      source.x,
+      source.y,
+      source.width,
+      source.height,
+      0,
+      0,
+      sampleSize.width,
+      sampleSize.height
+    );
+    return context.getImageData(0, 0, sampleSize.width, sampleSize.height);
+  }
+
+  function assertStableCapturedPixels(image, verificationImage, source) {
+    if (image.naturalWidth !== verificationImage.naturalWidth ||
+        image.naturalHeight !== verificationImage.naturalHeight) {
+      throw new Error("Capture stopped because verification frame dimensions changed.");
+    }
+    CaptureGuards.assertStablePixelSamples(
+      sampledPixels(image, source),
+      sampledPixels(verificationImage, source)
+    );
   }
 
   async function cropVisibleCapture(imageDataUrl, candidate) {
@@ -505,7 +417,7 @@
     );
   }
 
-  async function captureLongElement(element, initialCandidate) {
+  async function captureLongElement(element, initialCandidate, cancellation) {
     const originalScroll = { x: window.scrollX, y: window.scrollY };
     const expectedURL = location.href;
     const deadline = deadlineAfter(Core.CAPTURE_LIMITS.maxDurationMs);
@@ -515,9 +427,23 @@
     let targetObserver = null;
     let sessionStarted = false;
     let completed = false;
+    const stopImmediateRestoration = cancellation.onCancel(() => {
+      try {
+        window.scrollTo(originalScroll.x, originalScroll.y);
+      } catch (_error) {
+        // The final restoration path will retry and report persistent failures.
+      }
+      try {
+        restoreEnvironment();
+      } catch (_error) {
+        // The final restoration path will retry and report persistent failures.
+      }
+    });
 
     try {
+      cancellation.throwIfCancelled();
       await nextPaint();
+      cancellation.throwIfCancelled();
       if (!element.isConnected) throw new Error("The selected block is no longer on the page.");
 
       const targetRect = pageRectFor(element);
@@ -542,6 +468,7 @@
       const ready = await sendBeforeDeadline(begin, deadline);
       assertEnvelopeResponse(ready, "capture.long.ready");
       sessionStarted = true;
+      cancellation.throwIfCancelled();
 
       let canvas = null;
       let context = null;
@@ -551,8 +478,9 @@
       let scaleY = 0;
 
       for (const slice of slices) {
+        cancellation.throwIfCancelled();
         assertStableTarget(element, targetRect, expectedURL, viewport, () => targetChanged);
-        await scrollAndSettle(slice.scrollX, slice.scrollY, deadline);
+        await scrollAndSettle(slice.scrollX, slice.scrollY, deadline, cancellation);
         assertStableTarget(element, targetRect, expectedURL, viewport, () => targetChanged);
 
         const request = Core.makeEnvelope("capture.slice.request", { index: slice.index }, requestId);
@@ -560,15 +488,23 @@
           await sendBeforeDeadline(request, deadline),
           "capture.slice.response"
         );
+        cancellation.throwIfCancelled();
         if (response.payload.index !== slice.index || typeof response.payload.imageDataUrl !== "string") {
           throw new Error("The browser returned a mismatched capture slice.");
         }
+        if (typeof response.payload.verificationImageDataUrl !== "string") {
+          throw new Error("The browser did not return a capture verification frame.");
+        }
 
-        const image = await withTimeout(
-          loadImage(response.payload.imageDataUrl),
+        const [image, verificationImage] = await withTimeout(
+          Promise.all([
+            loadImage(response.payload.imageDataUrl),
+            loadImage(response.payload.verificationImageDataUrl)
+          ]),
           remainingTime(deadline),
-          "A capture slice could not be decoded before the timeout."
+          "Capture verification frames could not be decoded before the timeout."
         );
+        cancellation.throwIfCancelled();
         assertScrollPosition(slice.scrollX, slice.scrollY);
         assertStableTarget(element, targetRect, expectedURL, viewport, () => targetChanged);
         if (!canvas) {
@@ -613,6 +549,7 @@
         if (!source.width || !source.height || !destination.height) {
           throw new Error("A capture slice fell outside the visible browser viewport.");
         }
+        assertStableCapturedPixels(image, verificationImage, source);
         context.drawImage(
           image,
           source.x,
@@ -629,13 +566,22 @@
       const end = Core.makeEnvelope("capture.long.end", { cancelled: false }, requestId);
       assertEnvelopeResponse(await sendBeforeDeadline(end, deadline), "capture.long.ended");
       completed = true;
+      cancellation.throwIfCancelled();
 
       const result = canvas.toDataURL("image/png");
       if (!result.startsWith("data:image/png")) {
         throw new Error("The browser could not encode the completed long capture.");
       }
-      return result;
+      return {
+        imageDataUrl: result,
+        candidate: {
+          ...initialCandidate,
+          pageRect: targetRect,
+          viewport
+        }
+      };
     } finally {
+      stopImmediateRestoration();
       if (targetObserver) targetObserver.disconnect();
       if (sessionStarted && !completed) {
         const cancel = Core.makeEnvelope("capture.long.end", { cancelled: true }, requestId);
@@ -645,9 +591,7 @@
           // The background worker also expires abandoned sessions automatically.
         }
       }
-      window.scrollTo(originalScroll.x, originalScroll.y);
-      restoreEnvironment();
-      await nextPaint();
+      await CaptureGuards.restorePageState(window, originalScroll, restoreEnvironment, nextPaint);
     }
   }
 
@@ -672,6 +616,21 @@
     anchor.remove();
   }
 
+  function importOrDownload(imageDataUrl, candidate) {
+    return Delivery.importOrDownload({
+      imageDataUrl,
+      filename: filenameFor(candidate),
+      kind: candidate.kind,
+      sourceOrigin: candidate.url,
+      logicalWidth: candidate.pageRect.width,
+      logicalHeight: candidate.pageRect.height,
+      makeEnvelope: Core.makeEnvelope,
+      isEnvelope: Core.isEnvelope,
+      sendMessage,
+      download: downloadDataUrl
+    });
+  }
+
   function showCaptureError(error) {
     const previous = document.getElementById("smartshot-capture-error");
     if (previous) previous.remove();
@@ -693,43 +652,59 @@
     const element = currentElement();
     const candidate = candidateFor(element);
     if (!element || !candidate || state.capturing) return;
+    const cancellation = CaptureGuards.createCaptureCancellationController();
     state.capturing = true;
+    state.captureController = cancellation;
     stop();
-    await nextPaint();
+    document.addEventListener("keydown", onCaptureKeyDown, true);
 
     try {
+      await nextPaint();
+      cancellation.throwIfCancelled();
       const refreshedCandidate = candidateFor(element);
       if (!refreshedCandidate) throw new Error("The selected block is no longer on the page.");
       if (!Core.isRectFullyVisible(refreshedCandidate.viewportRect, refreshedCandidate.viewport)) {
-        const imageDataUrl = await captureLongElement(element, refreshedCandidate);
-        downloadDataUrl(imageDataUrl, filenameFor(refreshedCandidate));
+        const capture = await captureLongElement(element, refreshedCandidate, cancellation);
+        cancellation.throwIfCancelled();
+        await importOrDownload(capture.imageDataUrl, capture.candidate);
         return;
       }
 
       const request = Core.makeEnvelope("capture.request", { candidate: refreshedCandidate });
       const response = await sendMessage(request);
+      cancellation.throwIfCancelled();
       if (!Core.isEnvelope(response)) throw new Error("SmartShot returned an invalid response.");
       if (response.type === "error") throw new Error(response.payload.message || "Capture failed.");
-      if (response.payload.handledBy === "native") return;
       if (response.type !== "capture.response" || typeof response.payload.imageDataUrl !== "string") {
         throw new Error("No browser capture was returned.");
       }
 
       const croppedDataUrl = await cropVisibleCapture(response.payload.imageDataUrl, refreshedCandidate);
-      downloadDataUrl(croppedDataUrl, filenameFor(refreshedCandidate));
+      cancellation.throwIfCancelled();
+      await importOrDownload(croppedDataUrl, refreshedCandidate);
     } catch (error) {
-      console.error("SmartShot capture failed:", error);
-      showCaptureError(error);
+      if (!CaptureGuards.isCaptureCancellation(error)) {
+        console.error("SmartShot capture failed:", error);
+        showCaptureError(error);
+      }
     } finally {
+      document.removeEventListener("keydown", onCaptureKeyDown, true);
+      if (state.captureController === cancellation) state.captureController = null;
       state.capturing = false;
     }
   }
 
   extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!Core.isEnvelope(message)) return false;
-    if (message.type === "selection.toggle") state.active ? stop() : start();
+    if (message.type === "selection.toggle") {
+      if (state.capturing) cancelCapture();
+      else state.active ? stop() : start();
+    }
     else if (message.type === "selection.start") start();
-    else if (message.type === "selection.stop") stop();
+    else if (message.type === "selection.stop") {
+      if (state.capturing) cancelCapture();
+      stop();
+    }
     else return false;
 
     if (typeof sendResponse === "function") {
@@ -737,4 +712,7 @@
     }
     return false;
   });
+
+  window.addEventListener("pagehide", onPageLifecycleExit, true);
+  document.addEventListener("visibilitychange", onVisibilityChange, true);
 })();

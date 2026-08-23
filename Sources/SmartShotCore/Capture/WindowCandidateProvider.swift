@@ -25,6 +25,7 @@ public struct WindowCandidateProvider: Sendable {
                 ownerPID != ownProcessID,
                 let layer = info[kCGWindowLayer as String] as? Int,
                 layer == 0,
+                let windowNumber = info[kCGWindowNumber as String] as? NSNumber,
                 let boundsDictionary = info[kCGWindowBounds as String] as? NSDictionary,
                 let quartzRect = CGRect(dictionaryRepresentation: boundsDictionary),
                 quartzRect.contains(quartzPoint)
@@ -40,7 +41,8 @@ public struct WindowCandidateProvider: Sendable {
                     rect: ScreenGeometry.quartzToCocoa(quartzRect),
                     source: .window,
                     label: label,
-                    level: matches.count
+                    level: matches.count,
+                    windowID: CGWindowID(windowNumber.uint32Value)
                 )
             )
 

@@ -66,3 +66,23 @@ enum ManualLongCaptureCompletionPolicy {
             && currentScrollAttemptCount > acceptedScrollAttemptCount
     }
 }
+
+#if DEBUG
+struct DebugCaptureSessionGate: Sendable {
+    private var currentID: UUID?
+
+    mutating func begin() -> UUID {
+        let id = UUID()
+        currentID = id
+        return id
+    }
+
+    mutating func invalidate() {
+        currentID = nil
+    }
+
+    func contains(_ id: UUID) -> Bool {
+        currentID == id
+    }
+}
+#endif

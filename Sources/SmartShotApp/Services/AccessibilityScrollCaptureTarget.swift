@@ -47,6 +47,106 @@ struct AccessibilityScrollCaptureTarget: @unchecked Sendable {
 
     var valueRange: ClosedRange<Double> { minimumValue ... maximumValue }
 
+#if DEBUG
+    static func hasVisibleWindowForDebug(processIdentifier: pid_t) -> Bool {
+        windowSnapshots().contains {
+            $0.processIdentifier == processIdentifier &&
+                $0.layer == 0 &&
+                $0.alpha > 0.01
+        }
+    }
+
+    static func resolveFirstScrollableTargetForDebug(
+        bundleIdentifier: String
+    ) async -> Result<Self, AccessibilityScrollTargetError> {
+        await Task.detached(priority: .userInitiated) {
+            do {
+                return .success(try resolveFirstScrollableTargetForDebug(
+                    bundleIdentifier: bundleIdentifier
+                ))
+            } catch let error as AccessibilityScrollTargetError {
+                return .failure(error)
+            } catch {
+                return .failure(.unavailable)
+            }
+        }.value
+    }
+
+    private static func resolveFirstScrollableTargetForDebug(
+        bundleIdentifier: String
+    ) throws -> Self {
+        let applications = NSRunningApplication.runningApplications(
+            withBundleIdentifier: bundleIdentifier
+        )
+        let visibleProcessIdentifiers = Set(
+            windowSnapshots()
+                .filter { $0.layer == 0 && $0.alpha > 0.01 }
+                .map(\.processIdentifier)
+        )
+        guard let application = applications.first(where: {
+            visibleProcessIdentifiers.contains($0.processIdentifier)
+        }) ?? applications.first else { throw AccessibilityScrollTargetError.unavailable }
+
+        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+        configureMessagingTimeout(for: applicationElement)
+        var queue: [AXUIElement] = []
+        if let focusedWindow = copyElement(
+            kAXFocusedWindowAttribute as CFString,
+            from: applicationElement
+        ) {
+            queue.append(focusedWindow)
+        }
+        if let mainWindow = copyElement(
+            kAXMainWindowAttribute as CFString,
+            from: applicationElement
+        ), !queue.contains(where: { CFEqual($0, mainWindow) }) {
+            queue.append(mainWindow)
+        }
+        for window in copyElements(kAXWindowsAttribute as CFString, from: applicationElement)
+            where !queue.contains(where: { CFEqual($0, window) }) {
+            queue.append(window)
+        }
+        var visited: [AXUIElement] = []
+        var index = 0
+        var capabilityError: AccessibilityScrollTargetError?
+        while index < queue.count, visited.count < 512 {
+            let element = queue[index]
+            index += 1
+            guard !visited.contains(where: { CFEqual($0, element) }) else { continue }
+            visited.append(element)
+            configureMessagingTimeout(for: element)
+            let role = copyString(kAXRoleAttribute as CFString, from: element) ?? "<missing>"
+
+            if role == kAXScrollAreaRole as String,
+               let window = copyElement(kAXWindowAttribute as CFString, from: element)
+                    ?? firstAncestor(withRole: kAXWindowRole as String, from: element),
+               let windowFrame = copyFrame(from: window),
+               let windowIdentifier = targetWindowIdentifier(
+                    processIdentifier: application.processIdentifier,
+                    quartzFrame: windowFrame
+               ) {
+                do {
+                    return try makeTarget(
+                        scrollArea: element,
+                        expectedIdentity: AccessibilityScrollTargetIdentity(
+                            processIdentifier: application.processIdentifier,
+                            windowIdentifier: windowIdentifier
+                        )
+                    )
+                } catch let error as AccessibilityScrollTargetError {
+                    capabilityError = error
+                }
+            }
+
+            queue.append(contentsOf: copyElements(kAXChildrenAttribute as CFString, from: element))
+            queue.append(contentsOf: copyElements(kAXContentsAttribute as CFString, from: element))
+        }
+
+        if let capabilityError { throw capabilityError }
+        throw AccessibilityScrollTargetError.noScrollableArea
+    }
+#endif
+
     static func resolveInBackground(
         at appKitPoint: CGPoint,
         matching expectedFrame: CGRect,

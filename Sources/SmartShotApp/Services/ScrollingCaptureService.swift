@@ -44,6 +44,7 @@ struct ScrollingCaptureConfiguration: Sendable {
     var initialStepFraction = 0.08
     var targetScrollFraction = 0.72
     var settleDelay: Duration = .milliseconds(180)
+    var maximumIdleMeanAbsoluteDifference = 0.008
 }
 
 @MainActor
@@ -99,7 +100,7 @@ struct ScrollingCaptureService {
         try await pause(configuration.settleDelay / 2)
         try target.validate()
         let stabilityFrame = try await preparedCapture.captureFrame()
-        try await requireIdentical(previousFrame.image, stabilityFrame.image)
+        try await requireVisuallyEquivalent(previousFrame.image, stabilityFrame.image)
         previousFrame = stabilityFrame
 
         guard previousFrame.image.width <= configuration.maximumOutputDimensionPixels,
@@ -299,7 +300,7 @@ struct ScrollingCaptureService {
         try target.validate()
         let confirmation = try await preparedCapture.captureFrame()
         do {
-            try await requireIdentical(previousImage, confirmation.image)
+            try await requireVisuallyEquivalent(previousImage, confirmation.image)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -353,6 +354,7 @@ struct ScrollingCaptureService {
                     fixedTopHeightPixels: fixedTopHeightPixels,
                     maximumMeanAbsoluteDifference: 0.025,
                     minimumConfidence: 0.84,
+                    minimumUniqueness: 0.08,
                     maximumSampleRows: 64,
                     maximumSampleColumns: 72,
                     maximumInputPixelCount: 32_000_000
@@ -382,12 +384,29 @@ struct ScrollingCaptureService {
         }
     }
 
-    private func requireIdentical(_ first: CGImage, _ second: CGImage) async throws {
+    private func requireVisuallyEquivalent(_ first: CGImage, _ second: CGImage) async throws {
+        let firstImage = SendableCGImage(first)
+        let secondImage = SendableCGImage(second)
+        let pixelLimit = configuration.maximumPixelCount
+        let comparisonTask = Task.detached(priority: .userInitiated) {
+            try VerticalOverlapEstimator.meanAbsoluteDifferenceAtSamePosition(
+                first: firstImage.value,
+                second: secondImage.value,
+                horizontalInsetFraction: 0.10,
+                maximumSampleRows: 64,
+                maximumSampleColumns: 72,
+                maximumInputPixelCount: pixelLimit
+            )
+        }
         do {
-            _ = try await estimateOverlap(previous: first, current: second)
-            throw ScrollingCaptureError.contentChanged
-        } catch VerticalOverlapEstimationError.identicalImages {
-            return
+            let difference = try await withTaskCancellationHandler {
+                try await comparisonTask.value
+            } onCancel: {
+                comparisonTask.cancel()
+            }
+            guard difference <= configuration.maximumIdleMeanAbsoluteDifference else {
+                throw ScrollingCaptureError.contentChanged
+            }
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as ScrollingCaptureError {
@@ -406,6 +425,7 @@ struct ScrollingCaptureService {
             try? await Task.sleep(for: duration)
         }.value
     }
+
 }
 
 private struct SendableCGImage: @unchecked Sendable {

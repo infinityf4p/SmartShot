@@ -16,7 +16,8 @@ public enum CandidateFilter {
                     rect: candidate.rect.intersection(desktopBounds),
                     source: candidate.source,
                     label: candidate.label,
-                    level: candidate.level
+                    level: candidate.level,
+                    windowID: candidate.windowID
                 )
             }
             .filter { !$0.rect.isNull && $0.rect.width >= minimumSize.width && $0.rect.height >= minimumSize.height }

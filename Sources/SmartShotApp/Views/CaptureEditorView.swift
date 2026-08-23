@@ -5,6 +5,7 @@ import SwiftUI
 struct CaptureEditorView: View {
     @ObservedObject var editor: CaptureEditorModel
     @State private var zoomScale: CGFloat = 1
+    @State private var showsTextRecognition = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -103,6 +104,15 @@ struct CaptureEditorView: View {
                 .disabled(!editor.canRedo)
                 .help("Redo")
 
+                Button(action: editor.deleteSelected) {
+                    Image(systemName: "trash")
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.borderless)
+                .keyboardShortcut(.delete, modifiers: [])
+                .disabled(!editor.canDeleteSelection)
+                .help("Delete selected annotation")
+
                 if editor.currentCrop != .full {
                     Button(action: editor.resetCrop) {
                         Image(systemName: "crop.rotate")
@@ -110,6 +120,21 @@ struct CaptureEditorView: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Restore full image bounds")
+                }
+
+                Button {
+                    showsTextRecognition = true
+                    if editor.recognizedTextBlocks.isEmpty && !editor.isRecognizingText {
+                        editor.recognizeText()
+                    }
+                } label: {
+                    Image(systemName: "text.viewfinder")
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.borderless)
+                .help("Recognize text")
+                .popover(isPresented: $showsTextRecognition, arrowEdge: .bottom) {
+                    TextRecognitionPanel(editor: editor)
                 }
 
                 Button(action: editor.resetAll) {
@@ -200,22 +225,36 @@ struct CaptureEditorView: View {
 
     private func label(for tool: ScreenshotEditingTool) -> String {
         switch tool {
+        case .select: "Select"
         case .crop: "Crop"
+        case .freehand: "Freehand"
         case .arrow: "Arrow"
         case .rectangle: "Rectangle"
+        case .ellipse: "Ellipse"
         case .text: "Text"
         case .mosaic: "Mosaic"
+        case .blur: "Blur"
+        case .redaction: "Redact"
+        case .spotlight: "Spotlight"
+        case .magnifier: "Magnifier"
         case .counter: "Number"
         }
     }
 
     private func icon(for tool: ScreenshotEditingTool) -> String {
         switch tool {
+        case .select: "cursorarrow"
         case .crop: "crop"
+        case .freehand: "pencil.tip"
         case .arrow: "arrow.up.right"
         case .rectangle: "rectangle"
+        case .ellipse: "circle"
         case .text: "character.cursor.ibeam"
         case .mosaic: "square.grid.3x3.fill"
+        case .blur: "drop.halffull"
+        case .redaction: "rectangle.fill"
+        case .spotlight: "scope"
+        case .magnifier: "plus.magnifyingglass"
         case .counter: "number.circle"
         }
     }
@@ -236,10 +275,71 @@ struct CaptureEditorView: View {
     }
 }
 
+private struct TextRecognitionPanel: View {
+    @ObservedObject var editor: CaptureEditorModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Recognized Text")
+                    .font(.headline)
+                Spacer()
+                Button(action: editor.recognizeText) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .disabled(editor.isRecognizingText)
+                .help("Recognize again")
+            }
+
+            if editor.isRecognizingText {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = editor.textRecognitionError {
+                ContentUnavailableView(
+                    "Recognition Failed",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(error)
+                )
+            } else if editor.recognizedText.isEmpty {
+                ContentUnavailableView("No Text", systemImage: "text.viewfinder")
+            } else {
+                ScrollView {
+                    Text(editor.recognizedText)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+
+                HStack {
+                    Button(action: editor.copyRecognizedText) {
+                        Label("Copy", systemImage: "doc.on.doc")
+                    }
+                    Button(action: editor.redactSensitiveText) {
+                        Label(
+                            "Sensitive (\(editor.sensitiveTextBlocks.count))",
+                            systemImage: "hand.raised.fill"
+                        )
+                    }
+                    .disabled(editor.sensitiveTextBlocks.isEmpty)
+                    Button(action: editor.redactAllRecognizedText) {
+                        Label("All", systemImage: "rectangle.fill")
+                    }
+                }
+                .controlSize(.small)
+            }
+        }
+        .padding(14)
+        .frame(width: 380, height: 320)
+    }
+}
+
 private struct EditorImageCanvas: View {
     @ObservedObject var editor: CaptureEditorModel
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
+    @State private var dragPoints: [CGPoint] = []
 
     var body: some View {
         GeometryReader { proxy in
@@ -250,6 +350,15 @@ private struct EditorImageCanvas: View {
                     .accessibilityLabel("Screenshot editor canvas")
 
                 draftOverlay(in: proxy.size)
+
+                if let bounds = editor.selectedAnnotationBoundsInCrop {
+                    let rect = selectionRect(bounds, in: proxy.size)
+                    Rectangle()
+                        .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                        .frame(width: max(18, rect.width), height: max(18, rect.height))
+                        .position(x: rect.midX, y: rect.midY)
+                        .allowsHitTesting(false)
+                }
 
                 Color.clear
                     .contentShape(Rectangle())
@@ -272,15 +381,19 @@ private struct EditorImageCanvas: View {
                         opacity: editor.selectedColor.alpha
                     )
                 switch editor.selectedTool {
-                case .crop, .rectangle, .mosaic:
+                case .crop, .rectangle, .mosaic, .blur, .redaction, .spotlight:
                     let rect = CGRect(
                         x: min(dragStart.x, dragCurrent.x),
                         y: min(dragStart.y, dragCurrent.y),
                         width: abs(dragCurrent.x - dragStart.x),
                         height: abs(dragCurrent.y - dragStart.y)
                     )
-                    if editor.selectedTool == .mosaic {
+                    if [.mosaic, .blur].contains(editor.selectedTool) {
                         context.fill(Path(rect), with: .color(color.opacity(0.18)))
+                    } else if editor.selectedTool == .redaction {
+                        context.fill(Path(rect), with: .color(Color.black.opacity(0.88)))
+                    } else if editor.selectedTool == .spotlight {
+                        context.fill(Path(rect), with: .color(Color.white.opacity(0.12)))
                     }
                     context.stroke(
                         Path(rect),
@@ -290,10 +403,31 @@ private struct EditorImageCanvas: View {
                             dash: editor.selectedTool == .crop ? [7, 4] : []
                         )
                     )
-                case .arrow:
+                case .ellipse:
+                    let rect = CGRect(
+                        x: min(dragStart.x, dragCurrent.x),
+                        y: min(dragStart.y, dragCurrent.y),
+                        width: abs(dragCurrent.x - dragStart.x),
+                        height: abs(dragCurrent.y - dragStart.y)
+                    )
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(color),
+                        style: StrokeStyle(lineWidth: max(1.5, editor.lineWidthPoints))
+                    )
+                case .arrow, .magnifier:
                     var path = Path()
                     path.move(to: dragStart)
                     path.addLine(to: dragCurrent)
+                    if editor.selectedTool == .magnifier {
+                        context.stroke(path, with: .color(color.opacity(0.7)), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        context.stroke(
+                            Path(ellipseIn: CGRect(x: dragCurrent.x - 28, y: dragCurrent.y - 28, width: 56, height: 56)),
+                            with: .color(color),
+                            style: StrokeStyle(lineWidth: 2)
+                        )
+                        return
+                    }
                     let angle = atan2(
                         dragCurrent.y - dragStart.y,
                         dragCurrent.x - dragStart.x
@@ -322,7 +456,21 @@ private struct EditorImageCanvas: View {
                             lineJoin: .round
                         )
                     )
-                case .text, .counter:
+                case .freehand:
+                    guard let first = dragPoints.first else { return }
+                    var path = Path()
+                    path.move(to: first)
+                    dragPoints.dropFirst().forEach { path.addLine(to: $0) }
+                    context.stroke(
+                        path,
+                        with: .color(color),
+                        style: StrokeStyle(
+                            lineWidth: max(1.5, editor.lineWidthPoints),
+                            lineCap: .round,
+                            lineJoin: .round
+                        )
+                    )
+                case .select, .text, .counter:
                     break
                 }
             }
@@ -332,8 +480,8 @@ private struct EditorImageCanvas: View {
 
     private var drawsDragPreview: Bool {
         switch editor.selectedTool {
-        case .crop, .arrow, .rectangle, .mosaic: true
-        case .text, .counter: false
+        case .crop, .freehand, .arrow, .rectangle, .ellipse, .mosaic, .blur, .redaction, .spotlight, .magnifier: true
+        case .select, .text, .counter: false
         }
     }
 
@@ -342,18 +490,36 @@ private struct EditorImageCanvas: View {
             .onChanged { value in
                 if dragStart == nil {
                     dragStart = clamped(value.startLocation, to: size)
+                    dragPoints = [dragStart!]
                 }
-                dragCurrent = clamped(value.location, to: size)
+                let current = clamped(value.location, to: size)
+                dragCurrent = current
+                if editor.selectedTool == .freehand,
+                   let last = dragPoints.last,
+                   hypot(current.x - last.x, current.y - last.y) >= 2 {
+                    dragPoints.append(current)
+                }
             }
             .onEnded { value in
                 let start = dragStart ?? clamped(value.startLocation, to: size)
                 let end = clamped(value.location, to: size)
-                editor.commitInteraction(
-                    from: normalized(start, in: size),
-                    to: normalized(end, in: size)
-                )
+                if editor.selectedTool == .freehand {
+                    if dragPoints.last != end { dragPoints.append(end) }
+                    editor.commitFreehand(points: dragPoints.map { normalized($0, in: size) })
+                } else if editor.selectedTool == .select {
+                    editor.selectOrMove(
+                        from: normalized(start, in: size),
+                        to: normalized(end, in: size)
+                    )
+                } else {
+                    editor.commitInteraction(
+                        from: normalized(start, in: size),
+                        to: normalized(end, in: size)
+                    )
+                }
                 dragStart = nil
                 dragCurrent = nil
+                dragPoints.removeAll(keepingCapacity: true)
             }
     }
 
@@ -368,6 +534,15 @@ private struct EditorImageCanvas: View {
         CGPoint(
             x: min(size.width, max(0, point.x)),
             y: min(size.height, max(0, point.y))
+        )
+    }
+
+    private func selectionRect(_ bounds: NormalizedRect, in size: CGSize) -> CGRect {
+        CGRect(
+            x: bounds.minX * size.width,
+            y: bounds.minY * size.height,
+            width: bounds.width * size.width,
+            height: bounds.height * size.height
         )
     }
 }

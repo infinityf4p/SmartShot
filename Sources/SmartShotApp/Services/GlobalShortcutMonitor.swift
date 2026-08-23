@@ -271,4 +271,137 @@ final class GlobalShortcutMonitor {
     }
 }
 
+enum TransientEscapeHotKeyRegistration: Equatable {
+    case registered
+    case unavailable(OSStatus)
+
+    var fallbackInstruction: String? {
+        switch self {
+        case .registered:
+            nil
+        case .unavailable:
+            "Esc unavailable - click Cancel"
+        }
+    }
+
+    func detailText(_ detail: String) -> String {
+        guard let fallbackInstruction else { return detail }
+        return "\(fallbackInstruction). \(detail)"
+    }
+}
+
+@MainActor
+final class TransientEscapeHotKeyMonitor {
+    typealias RegistrationHandler = (EventHotKeyID, inout EventHotKeyRef?) -> OSStatus
+
+    private var hotKey: EventHotKeyRef?
+    private var eventHandler: EventHandlerRef?
+    private let registrationHandler: RegistrationHandler
+    private let action: () -> Void
+    private(set) var activeID: UInt32?
+    private static var nextID: UInt32 = 1
+
+    init(
+        registrationHandler: RegistrationHandler? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.registrationHandler = registrationHandler ?? { identifier, candidate in
+            RegisterEventHotKey(
+                UInt32(kVK_Escape),
+                0,
+                identifier,
+                GetApplicationEventTarget(),
+                OptionBits(kEventHotKeyExclusive),
+                &candidate
+            )
+        }
+        self.action = action
+    }
+
+    @discardableResult
+    func start() -> TransientEscapeHotKeyRegistration {
+        guard hotKey == nil else { return .registered }
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        let pointer = Unmanaged.passUnretained(self).toOpaque()
+        let handlerStatus = InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, event, userData in
+                guard let event, let userData else { return OSStatus(eventNotHandledErr) }
+                var receivedID = EventHotKeyID()
+                let readStatus = GetEventParameter(
+                    event,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &receivedID
+                )
+                guard readStatus == noErr,
+                      receivedID.signature == smartShotEscapeHotKeySignature else {
+                    return readStatus == noErr ? OSStatus(eventNotHandledErr) : readStatus
+                }
+                let monitor = Unmanaged<TransientEscapeHotKeyMonitor>
+                    .fromOpaque(userData)
+                    .takeUnretainedValue()
+                Task { @MainActor in
+                    monitor.receiveHotKey(withID: receivedID.id)
+                }
+                return noErr
+            },
+            1,
+            &eventType,
+            pointer,
+            &eventHandler
+        )
+        guard handlerStatus == noErr else {
+            eventHandler = nil
+            return .unavailable(handlerStatus)
+        }
+
+        let identifier = Self.makeIdentifier()
+        var candidate: EventHotKeyRef?
+        let registrationStatus = registrationHandler(identifier, &candidate)
+        guard registrationStatus == noErr else {
+            if let candidate { UnregisterEventHotKey(candidate) }
+            removeEventHandler()
+            return .unavailable(registrationStatus)
+        }
+        guard let candidate else {
+            removeEventHandler()
+            return .unavailable(OSStatus(paramErr))
+        }
+
+        hotKey = candidate
+        activeID = identifier.id
+        return .registered
+    }
+
+    func stop() {
+        if let hotKey { UnregisterEventHotKey(hotKey) }
+        hotKey = nil
+        activeID = nil
+        removeEventHandler()
+    }
+
+    func receiveHotKey(withID identifier: UInt32) {
+        guard identifier == activeID else { return }
+        action()
+    }
+
+    private func removeEventHandler() {
+        if let eventHandler { RemoveEventHandler(eventHandler) }
+        eventHandler = nil
+    }
+
+    private static func makeIdentifier() -> EventHotKeyID {
+        defer { nextID = nextID == UInt32.max ? 1 : nextID + 1 }
+        return EventHotKeyID(signature: smartShotEscapeHotKeySignature, id: nextID)
+    }
+}
+
 private let blockShotHotKeySignature: FourCharCode = 0x424C5348
+private let smartShotEscapeHotKeySignature: FourCharCode = 0x53534553

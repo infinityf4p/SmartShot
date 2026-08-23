@@ -104,6 +104,9 @@ public enum ScreenshotRenderer {
             logicalSize: outputLogicalSize
         )
 
+        for annotation in document.annotations where annotation.kind == .redaction {
+            redact(bitmap: &bitmap, rect: mapping.rect(from: annotation))
+        }
         for annotation in document.annotations where annotation.kind == .mosaic {
             pixelate(
                 bitmap: &bitmap,
@@ -111,9 +114,35 @@ public enum ScreenshotRenderer {
                 pixelsPerPoint: mapping.pixelsPerPoint
             )
         }
+        for annotation in document.annotations where annotation.kind == .blur {
+            blur(
+                bitmap: &bitmap,
+                rect: mapping.rect(from: annotation),
+                pixelsPerPoint: mapping.pixelsPerPoint
+            )
+        }
+
+        let privacySafePixels = bitmap.bytes
+        let spotlights = document.annotations.filter { $0.kind == .spotlight }
+        if !spotlights.isEmpty {
+            dimOutside(
+                bitmap: &bitmap,
+                focusRects: spotlights.map(mapping.rect(from:))
+            )
+        }
+        for annotation in document.annotations where annotation.kind == .magnifier {
+            magnify(
+                bitmap: &bitmap,
+                sourcePixels: privacySafePixels,
+                annotation: annotation,
+                mapping: mapping
+            )
+        }
 
         try drawVectorAnnotations(
-            document.annotations.filter { $0.kind != .mosaic },
+            document.annotations.filter {
+                ![.mosaic, .blur, .redaction, .spotlight].contains($0.kind)
+            },
             bitmap: &bitmap,
             mapping: mapping
         )
@@ -159,6 +188,11 @@ private extension ScreenshotRenderer {
                 width: abs(first.x - second.x),
                 height: abs(first.y - second.y)
             )
+        }
+
+        func points(from annotation: ScreenshotAnnotation) -> [CGPoint] {
+            (annotation.points.isEmpty ? [annotation.start, annotation.end] : annotation.points)
+                .map(point)
         }
     }
 
@@ -232,8 +266,12 @@ private extension ScreenshotRenderer {
                 context.setLineCap(.round)
                 context.setLineJoin(.round)
                 switch annotation.kind {
+                case .freehand:
+                    drawFreehand(annotation, context: context, mapping: mapping)
                 case .rectangle:
                     context.stroke(mapping.rect(from: annotation))
+                case .ellipse:
+                    context.strokeEllipse(in: mapping.rect(from: annotation))
                 case .arrow:
                     drawArrow(
                         annotation,
@@ -250,7 +288,29 @@ private extension ScreenshotRenderer {
                         mapping: mapping,
                         lineWidth: lineWidth
                     )
-                case .mosaic:
+                case .magnifier:
+                    let center = mapping.point(annotation.end)
+                    let radius = magnifierRadius(
+                        lineWidth: lineWidth,
+                        pixelsPerPoint: mapping.pixelsPerPoint
+                    )
+                    context.setStrokeColor(ScreenshotColor.white.cgColor)
+                    context.setLineWidth(max(2, mapping.pixelsPerPoint * 2))
+                    context.strokeEllipse(in: CGRect(
+                        x: center.x - radius,
+                        y: center.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    ))
+                    context.setStrokeColor(ScreenshotColor.black.cgColor)
+                    context.setLineWidth(max(1, mapping.pixelsPerPoint))
+                    context.strokeEllipse(in: CGRect(
+                        x: center.x - radius + mapping.pixelsPerPoint,
+                        y: center.y - radius + mapping.pixelsPerPoint,
+                        width: radius * 2 - mapping.pixelsPerPoint * 2,
+                        height: radius * 2 - mapping.pixelsPerPoint * 2
+                    ))
+                case .mosaic, .blur, .redaction, .spotlight:
                     break
                 }
                 context.restoreGState()
@@ -287,6 +347,20 @@ private extension ScreenshotRenderer {
         context.addLine(to: CGPoint(x: base.x + perpendicular.x, y: base.y + perpendicular.y))
         context.move(to: end)
         context.addLine(to: CGPoint(x: base.x - perpendicular.x, y: base.y - perpendicular.y))
+        context.strokePath()
+    }
+
+    static func drawFreehand(
+        _ annotation: ScreenshotAnnotation,
+        context: CGContext,
+        mapping: CoordinateMapping
+    ) {
+        let points = mapping.points(from: annotation)
+        guard let first = points.first, points.count > 1 else { return }
+        context.move(to: first)
+        for point in points.dropFirst() {
+            context.addLine(to: point)
+        }
         context.strokePath()
     }
 
@@ -409,6 +483,141 @@ private extension ScreenshotRenderer {
                 }
             }
         }
+    }
+
+    static func redact(bitmap: inout RGBA8Image, rect: CGRect) {
+        guard let bounds = integerBounds(for: rect, in: bitmap) else { return }
+        let color: [UInt8] = [15, 15, 18, 255]
+        for y in bounds.minY..<bounds.maxY {
+            for x in bounds.minX..<bounds.maxX {
+                let offset = bitmap.byteOffset(x: x, y: y)
+                bitmap.bytes.replaceSubrange(offset..<(offset + 4), with: color)
+            }
+        }
+    }
+
+    static func blur(bitmap: inout RGBA8Image, rect: CGRect, pixelsPerPoint: Double) {
+        guard let bounds = integerBounds(for: rect, in: bitmap) else { return }
+        let radius = max(2, min(24, Int((5 * pixelsPerPoint).rounded())))
+        let width = bounds.maxX - bounds.minX
+        let height = bounds.maxY - bounds.minY
+        guard width > 1, height > 1 else { return }
+
+        var line = [UInt8](repeating: 0, count: max(width, height) * 4)
+        for y in bounds.minY..<bounds.maxY {
+            for index in 0..<width {
+                let source = bitmap.byteOffset(x: bounds.minX + index, y: y)
+                line.replaceSubrange((index * 4)..<(index * 4 + 4), with: bitmap.bytes[source..<(source + 4)])
+            }
+            boxBlurLine(&line, count: width, radius: radius) { index, component, value in
+                bitmap.bytes[bitmap.byteOffset(x: bounds.minX + index, y: y) + component] = value
+            }
+        }
+        for x in bounds.minX..<bounds.maxX {
+            for index in 0..<height {
+                let source = bitmap.byteOffset(x: x, y: bounds.minY + index)
+                line.replaceSubrange((index * 4)..<(index * 4 + 4), with: bitmap.bytes[source..<(source + 4)])
+            }
+            boxBlurLine(&line, count: height, radius: radius) { index, component, value in
+                bitmap.bytes[bitmap.byteOffset(x: x, y: bounds.minY + index) + component] = value
+            }
+        }
+    }
+
+    static func boxBlurLine(
+        _ source: inout [UInt8],
+        count: Int,
+        radius: Int,
+        write: (_ index: Int, _ component: Int, _ value: UInt8) -> Void
+    ) {
+        guard count > 0 else { return }
+        for component in 0..<3 {
+            var sum = 0
+            var lower = 0
+            var upper = min(count - 1, radius)
+            for index in lower...upper { sum += Int(source[index * 4 + component]) }
+            for index in 0..<count {
+                let sampleCount = upper - lower + 1
+                write(index, component, UInt8(clamping: sum / sampleCount))
+                let nextLower = max(0, index + 1 - radius)
+                let nextUpper = min(count - 1, index + 1 + radius)
+                while lower < nextLower {
+                    sum -= Int(source[lower * 4 + component])
+                    lower += 1
+                }
+                while upper < nextUpper {
+                    upper += 1
+                    sum += Int(source[upper * 4 + component])
+                }
+            }
+        }
+    }
+
+    static func dimOutside(bitmap: inout RGBA8Image, focusRects: [CGRect]) {
+        let clipped = focusRects.map {
+            $0.standardized.intersection(CGRect(x: 0, y: 0, width: bitmap.width, height: bitmap.height))
+        }.filter { !$0.isNull && !$0.isEmpty }
+        guard !clipped.isEmpty else { return }
+        for y in 0..<bitmap.height {
+            for x in 0..<bitmap.width where !clipped.contains(where: { $0.contains(CGPoint(x: x, y: y)) }) {
+                let offset = bitmap.byteOffset(x: x, y: y)
+                for component in 0..<3 {
+                    bitmap.bytes[offset + component] = UInt8(
+                        (Double(bitmap.bytes[offset + component]) * 0.30).rounded()
+                    )
+                }
+            }
+        }
+    }
+
+    static func magnify(
+        bitmap: inout RGBA8Image,
+        sourcePixels: [UInt8],
+        annotation: ScreenshotAnnotation,
+        mapping: CoordinateMapping
+    ) {
+        let sourceCenter = mapping.point(annotation.start)
+        let lensCenter = mapping.point(annotation.end)
+        let radius = magnifierRadius(
+            lineWidth: annotation.lineWidthPoints * mapping.pixelsPerPoint,
+            pixelsPerPoint: mapping.pixelsPerPoint
+        )
+        let minX = max(0, Int(floor(lensCenter.x - radius)))
+        let maxX = min(bitmap.width, Int(ceil(lensCenter.x + radius)))
+        let minY = max(0, Int(floor(lensCenter.y - radius)))
+        let maxY = min(bitmap.height, Int(ceil(lensCenter.y + radius)))
+        let radiusSquared = radius * radius
+        for y in minY..<maxY {
+            for x in minX..<maxX {
+                let dx = Double(x) + 0.5 - lensCenter.x
+                let dy = Double(y) + 0.5 - lensCenter.y
+                guard dx * dx + dy * dy <= radiusSquared else { continue }
+                let sourceX = min(bitmap.width - 1, max(0, Int((sourceCenter.x + dx / annotation.magnification).rounded())))
+                let sourceY = min(bitmap.height - 1, max(0, Int((sourceCenter.y + dy / annotation.magnification).rounded())))
+                let sourceOffset = bitmap.byteOffset(x: sourceX, y: sourceY)
+                let destinationOffset = bitmap.byteOffset(x: x, y: y)
+                bitmap.bytes.replaceSubrange(
+                    destinationOffset..<(destinationOffset + 4),
+                    with: sourcePixels[sourceOffset..<(sourceOffset + 4)]
+                )
+            }
+        }
+    }
+
+    static func magnifierRadius(lineWidth: Double, pixelsPerPoint: Double) -> Double {
+        max(28 * pixelsPerPoint, lineWidth * 10)
+    }
+
+    static func integerBounds(for rect: CGRect, in bitmap: RGBA8Image) -> (minX: Int, minY: Int, maxX: Int, maxY: Int)? {
+        let clipped = rect.standardized.intersection(
+            CGRect(x: 0, y: 0, width: bitmap.width, height: bitmap.height)
+        )
+        guard !clipped.isNull, clipped.width >= 1, clipped.height >= 1 else { return nil }
+        let minX = max(0, Int(floor(clipped.minX)))
+        let minY = max(0, Int(floor(clipped.minY)))
+        let maxX = min(bitmap.width, Int(ceil(clipped.maxX)))
+        let maxY = min(bitmap.height, Int(ceil(clipped.maxY)))
+        return minX < maxX && minY < maxY ? (minX, minY, maxX, maxY) : nil
     }
 
     static func checkedByteCount(width: Int, height: Int) throws -> Int {

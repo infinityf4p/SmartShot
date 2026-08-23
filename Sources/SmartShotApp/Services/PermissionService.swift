@@ -1,31 +1,150 @@
 import AppKit
 import ApplicationServices
+import AVFoundation
 import CoreGraphics
 import Foundation
+
+@MainActor
+struct PermissionSystemClient {
+    let preflightScreenCaptureAccess: @MainActor () -> Bool
+    let requestScreenCaptureAccess: @MainActor () -> Bool
+    let isAccessibilityTrusted: @MainActor () -> Bool
+    let requestAccessibilityAccess: @MainActor () -> Bool
+    let openSettings: @MainActor (String) -> Void
+
+    static let live = PermissionSystemClient(
+        preflightScreenCaptureAccess: { CGPreflightScreenCaptureAccess() },
+        requestScreenCaptureAccess: { CGRequestScreenCaptureAccess() },
+        isAccessibilityTrusted: { AXIsProcessTrusted() },
+        requestAccessibilityAccess: {
+            let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+            return AXIsProcessTrustedWithOptions(options)
+        },
+        openSettings: { anchor in
+            guard let url = URL(
+                string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)"
+            ) else { return }
+            NSWorkspace.shared.open(url)
+        }
+    )
+}
 
 @MainActor
 final class PermissionService: ObservableObject {
     @Published private(set) var hasScreenCaptureAccess = false
     @Published private(set) var hasAccessibilityAccess = false
+    @Published private(set) var hasMicrophoneAccess = false
+    @Published private(set) var microphoneAuthorizationStatus: AVAuthorizationStatus = .notDetermined
 
-    init() {
+    private enum DefaultsKey {
+        static let requestedScreenCapture = "permissions.requestedScreenCapture.v1"
+        static let requestedAccessibility = "permissions.requestedAccessibility.v1"
+    }
+
+    private let defaults: UserDefaults
+    private let system: PermissionSystemClient
+
+    init(
+        defaults: UserDefaults = .standard,
+        system: PermissionSystemClient = .live
+    ) {
+        self.defaults = defaults
+        self.system = system
         refresh()
+    }
+
+    var screenCaptureActionTitle: String {
+        hasScreenCaptureAccess ? "Settings" : "Allow"
+    }
+
+    var accessibilityActionTitle: String {
+        hasAccessibilityAccess ? "Settings" : "Allow"
+    }
+
+    var microphoneActionTitle: String {
+        microphoneAuthorizationStatus == .notDetermined ? "Allow" : "Settings"
     }
 
     func refresh() {
-        hasScreenCaptureAccess = CGPreflightScreenCaptureAccess()
-        hasAccessibilityAccess = AXIsProcessTrusted()
+        hasScreenCaptureAccess = system.preflightScreenCaptureAccess()
+        hasAccessibilityAccess = system.isAccessibilityTrusted()
+        microphoneAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        hasMicrophoneAccess = microphoneAuthorizationStatus == .authorized
     }
 
     func requestScreenCapture() {
-        _ = CGRequestScreenCaptureAccess()
         refresh()
+        guard !hasScreenCaptureAccess else {
+            openScreenCaptureSettings()
+            return
+        }
+        requestScreenCaptureAccess()
+    }
+
+    func requestScreenCaptureIfNeeded() {
+        refresh()
+        guard !hasScreenCaptureAccess,
+              !defaults.bool(forKey: DefaultsKey.requestedScreenCapture) else { return }
+        requestScreenCaptureAccess()
+    }
+
+    private func requestScreenCaptureAccess() {
+        defaults.set(true, forKey: DefaultsKey.requestedScreenCapture)
+        let granted = system.requestScreenCaptureAccess()
+        refresh()
+        if !granted, !hasScreenCaptureAccess {
+            openScreenCaptureSettings()
+        }
     }
 
     func requestAccessibility() {
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
         refresh()
+        guard !hasAccessibilityAccess else {
+            openAccessibilitySettings()
+            return
+        }
+        requestAccessibilityAccess()
+    }
+
+    func requestAccessibilityIfNeeded() {
+        refresh()
+        guard !hasAccessibilityAccess,
+              !defaults.bool(forKey: DefaultsKey.requestedAccessibility) else { return }
+        requestAccessibilityAccess()
+    }
+
+    private func requestAccessibilityAccess() {
+        defaults.set(true, forKey: DefaultsKey.requestedAccessibility)
+        // The prompt-enabled AX call owns the recovery UI; opening Settings here can duplicate it.
+        _ = system.requestAccessibilityAccess()
+        refresh()
+    }
+
+    func requestMicrophone() {
+        refresh()
+        guard !hasMicrophoneAccess else {
+            openMicrophoneSettings()
+            return
+        }
+        guard microphoneAuthorizationStatus == .notDetermined else {
+            openMicrophoneSettings()
+            return
+        }
+        requestInitialMicrophoneAccess()
+    }
+
+    func requestMicrophoneIfNeeded() {
+        refresh()
+        guard !hasMicrophoneAccess,
+              microphoneAuthorizationStatus == .notDetermined else { return }
+        requestInitialMicrophoneAccess()
+    }
+
+    private func requestInitialMicrophoneAccess() {
+        Task { [weak self] in
+            _ = await AVCaptureDevice.requestAccess(for: .audio)
+            self?.refresh()
+        }
     }
 
     func openScreenCaptureSettings() {
@@ -36,8 +155,11 @@ final class PermissionService: ObservableObject {
         openSettings(anchor: "Privacy_Accessibility")
     }
 
+    func openMicrophoneSettings() {
+        openSettings(anchor: "Privacy_Microphone")
+    }
+
     private func openSettings(anchor: String) {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") else { return }
-        NSWorkspace.shared.open(url)
+        system.openSettings(anchor)
     }
 }

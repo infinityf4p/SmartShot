@@ -18,8 +18,8 @@ public struct VerticalFixedTopDetectorConfiguration: Equatable, Sendable {
         minimumHeightPixels: Int = 8,
         maximumHeightFraction: Double = 0.35,
         horizontalInsetFraction: Double = 0.08,
-        maximumStableRowDifference: Double = 0.018,
-        maximumStablePrefixDifference: Double = 0.010,
+        maximumStableRowDifference: Double = 0.030,
+        maximumStablePrefixDifference: Double = 0.025,
         minimumChangedRowDifference: Double = 0.035,
         minimumChangedRows: Int = 4,
         changedProbeHeightPixels: Int = 12,
@@ -149,20 +149,33 @@ public enum VerticalFixedTopDetector {
             let probeEnd = min(rowDifferences.count, boundary + configuration.changedProbeHeightPixels)
             guard probeEnd - boundary >= configuration.minimumChangedRows else { continue }
             let probe = rowDifferences[boundary..<probeEnd]
-            let leadingChangedRows = probe.prefix {
-                $0 >= configuration.minimumChangedRowDifference
-            }.count
             let changedRows = probe.reduce(into: 0) { count, difference in
                 if difference >= configuration.minimumChangedRowDifference { count += 1 }
             }
             let probeMean = probe.reduce(0, +) / Double(probe.count)
-            guard leadingChangedRows >= configuration.minimumChangedRows,
-                  changedRows >= configuration.minimumChangedRows,
+            guard changedRows >= configuration.minimumChangedRows,
                   probeMean >= configuration.minimumChangedRowDifference,
                   probeMean >= max(0.01, prefixMean * 3) else {
                 continue
             }
-            return boundary
+            guard let firstChangedOffset = probe.firstIndex(where: {
+                $0 >= configuration.minimumChangedRowDifference
+            }) else { continue }
+            let candidateBoundary = firstChangedOffset
+            let candidatePrefix = rowDifferences[..<candidateBoundary]
+            let candidateMean = candidatePrefix.reduce(0, +) / Double(candidatePrefix.count)
+            let candidateUnstableRows = candidatePrefix.reduce(into: 0) { count, difference in
+                if difference > configuration.maximumStableRowDifference { count += 1 }
+            }
+            let candidateUnstableFraction = Double(candidateUnstableRows) /
+                Double(candidatePrefix.count)
+            guard candidateBoundary >= configuration.minimumHeightPixels,
+                  candidateBoundary <= maximumHeaderHeight,
+                  candidateMean <= configuration.maximumStablePrefixDifference,
+                  candidateUnstableFraction <= configuration.maximumUnstablePrefixFraction else {
+                continue
+            }
+            return candidateBoundary
         }
         return 0
     }

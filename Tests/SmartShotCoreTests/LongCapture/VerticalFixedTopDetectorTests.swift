@@ -72,6 +72,68 @@ final class VerticalFixedTopDetectorTests: XCTestCase {
             headerHeight
         )
     }
+
+    func testToleratesMildHeaderDriftAndIncludesStableBodyInset() throws {
+        let width = 48
+        let height = 96
+        let headerHeight = 20
+        let stableBodyInset = 5
+        let previous = try makeTextLikeViewport(
+            width: width,
+            height: height,
+            headerHeight: headerHeight,
+            stableBodyInset: stableBodyInset,
+            bodySeed: 3,
+            headerDrift: 0
+        )
+        let current = try makeTextLikeViewport(
+            width: width,
+            height: height,
+            headerHeight: headerHeight,
+            stableBodyInset: stableBodyInset,
+            bodySeed: 97,
+            headerDrift: 4
+        )
+
+        XCTAssertEqual(
+            try VerticalFixedTopDetector.detect(previous: previous, current: current),
+            headerHeight + stableBodyInset
+        )
+    }
+
+    func testDoesNotExtendCandidatePastConfiguredMaximumHeight() throws {
+        let width = 48
+        let height = 96
+        let headerHeight = 24
+        let stableBodyInset = 5
+        let previous = try makeTextLikeViewport(
+            width: width,
+            height: height,
+            headerHeight: headerHeight,
+            stableBodyInset: stableBodyInset,
+            bodySeed: 3,
+            headerDrift: 0
+        )
+        let current = try makeTextLikeViewport(
+            width: width,
+            height: height,
+            headerHeight: headerHeight,
+            stableBodyInset: stableBodyInset,
+            bodySeed: 97,
+            headerDrift: 4
+        )
+        var configuration = VerticalFixedTopDetectorConfiguration()
+        configuration.maximumHeightFraction = 0.25
+
+        XCTAssertEqual(
+            try VerticalFixedTopDetector.detect(
+                previous: previous,
+                current: current,
+                configuration: configuration
+            ),
+            0
+        )
+    }
 }
 
 private func makeFixedTopViewport(
@@ -108,6 +170,38 @@ private func makeDetectorPattern(width: Int, height: Int, seed: Int) throws -> C
             bytes.append(UInt8(truncatingIfNeeded: x * 31 + y * 43 + seed * 17))
             bytes.append(UInt8(truncatingIfNeeded: x * 73 + y * 19 + x * y + seed * 29))
             bytes.append(UInt8(truncatingIfNeeded: x * 13 + y * 89 + y * y + seed * 7))
+            bytes.append(255)
+        }
+    }
+    return try makeTestImage(width: width, height: height, bytes: bytes)
+}
+
+private func makeTextLikeViewport(
+    width: Int,
+    height: Int,
+    headerHeight: Int,
+    stableBodyInset: Int,
+    bodySeed: Int,
+    headerDrift: Int
+) throws -> CGImage {
+    var bytes = [UInt8]()
+    bytes.reserveCapacity(width * height * 4)
+    for y in 0..<height {
+        for x in 0..<width {
+            if y < headerHeight {
+                bytes.append(UInt8(clamping: 70 + (x % 11) + headerDrift))
+                bytes.append(UInt8(clamping: 95 + (y % 7) + headerDrift))
+                bytes.append(UInt8(clamping: 125 + ((x + y) % 9) + headerDrift))
+            } else if y < headerHeight + stableBodyInset {
+                bytes.append(248)
+                bytes.append(248)
+                bytes.append(248)
+            } else {
+                let bodyY = y - headerHeight - stableBodyInset
+                bytes.append(UInt8(truncatingIfNeeded: x * 37 + bodyY * 17 + bodySeed * 53))
+                bytes.append(UInt8(truncatingIfNeeded: x * 11 + bodyY * 67 + bodySeed * 29))
+                bytes.append(UInt8(truncatingIfNeeded: x * 97 + bodyY * 23 + bodySeed * 13))
+            }
             bytes.append(255)
         }
     }

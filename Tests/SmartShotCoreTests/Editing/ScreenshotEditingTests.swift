@@ -174,6 +174,120 @@ final class ScreenshotEditingTests: XCTestCase {
 
         XCTAssertEqual(document.nextCounterValue, 8)
     }
+
+    func testRendererRedactionIsOpaqueAndIndependentOfOriginalPixels() throws {
+        let annotation = ScreenshotAnnotation(
+            kind: .redaction,
+            start: NormalizedPoint(x: 0.25, y: 0.25),
+            end: NormalizedPoint(x: 0.75, y: 0.75)
+        )
+        let first = try ScreenshotRenderer.render(
+            original: makeEditingCheckerboard(width: 20, height: 20),
+            logicalSize: CGSize(width: 20, height: 20),
+            document: ScreenshotEditDocument(annotations: [annotation])
+        )
+        let second = try ScreenshotRenderer.render(
+            original: makeSolidEditingImage(width: 20, height: 20, color: editingYellow),
+            logicalSize: CGSize(width: 20, height: 20),
+            document: ScreenshotEditDocument(annotations: [annotation])
+        )
+        let firstBytes = try normalizedBytes(of: first.image)
+        let secondBytes = try normalizedBytes(of: second.image)
+
+        XCTAssertEqual(editingPixel(firstBytes, width: 20, x: 10, y: 10), editingPixel(secondBytes, width: 20, x: 10, y: 10))
+        XCTAssertEqual(editingPixel(firstBytes, width: 20, x: 10, y: 10).alpha, 255)
+        XCTAssertNotEqual(editingPixel(firstBytes, width: 20, x: 1, y: 1), editingPixel(secondBytes, width: 20, x: 1, y: 1))
+    }
+
+    func testRendererBlurAndSpotlightEffects() throws {
+        let result = try ScreenshotRenderer.render(
+            original: makeEditingCheckerboard(width: 40, height: 40),
+            logicalSize: CGSize(width: 40, height: 40),
+            document: ScreenshotEditDocument(annotations: [
+                ScreenshotAnnotation(
+                    kind: .blur,
+                    start: NormalizedPoint(x: 0, y: 0),
+                    end: NormalizedPoint(x: 1, y: 1)
+                ),
+                ScreenshotAnnotation(
+                    kind: .spotlight,
+                    start: NormalizedPoint(x: 0.25, y: 0.25),
+                    end: NormalizedPoint(x: 0.75, y: 0.75)
+                ),
+            ])
+        )
+        let bytes = try normalizedBytes(of: result.image)
+        let focused = editingPixel(bytes, width: 40, x: 20, y: 20)
+        let dimmed = editingPixel(bytes, width: 40, x: 2, y: 2)
+        XCTAssertGreaterThan(focused.red, 80)
+        XCTAssertLessThan(focused.red, 180)
+        XCTAssertLessThan(dimmed.red, focused.red)
+    }
+
+    func testRendererDrawsEllipseAndFreehandPath() throws {
+        let result = try ScreenshotRenderer.render(
+            original: makeSolidEditingImage(width: 100, height: 100, color: editingWhite),
+            logicalSize: CGSize(width: 100, height: 100),
+            document: ScreenshotEditDocument(annotations: [
+                ScreenshotAnnotation(
+                    kind: .ellipse,
+                    start: NormalizedPoint(x: 0.1, y: 0.1),
+                    end: NormalizedPoint(x: 0.4, y: 0.4),
+                    color: .blue,
+                    lineWidthPoints: 3
+                ),
+                ScreenshotAnnotation(
+                    kind: .freehand,
+                    start: NormalizedPoint(x: 0.55, y: 0.2),
+                    end: NormalizedPoint(x: 0.85, y: 0.5),
+                    color: .red,
+                    lineWidthPoints: 3,
+                    points: [
+                        NormalizedPoint(x: 0.55, y: 0.2),
+                        NormalizedPoint(x: 0.7, y: 0.35),
+                        NormalizedPoint(x: 0.85, y: 0.5),
+                    ]
+                ),
+            ])
+        )
+        let bytes = try normalizedBytes(of: result.image)
+        XCTAssertGreaterThan(editingPixel(bytes, width: 100, x: 25, y: 10).blue, 150)
+        XCTAssertGreaterThan(editingPixel(bytes, width: 100, x: 70, y: 35).red, 200)
+    }
+
+    func testMagnifierSamplesOnlyPrivacySafePixels() throws {
+        let redaction = ScreenshotAnnotation(
+            kind: .redaction,
+            start: NormalizedPoint(x: 0.15, y: 0.15),
+            end: NormalizedPoint(x: 0.35, y: 0.35)
+        )
+        let magnifier = ScreenshotAnnotation(
+            kind: .magnifier,
+            start: NormalizedPoint(x: 0.25, y: 0.25),
+            end: NormalizedPoint(x: 0.70, y: 0.70),
+            lineWidthPoints: 2
+        )
+        let result = try ScreenshotRenderer.render(
+            original: makeEditingCheckerboard(width: 120, height: 120),
+            logicalSize: CGSize(width: 120, height: 120),
+            document: ScreenshotEditDocument(annotations: [redaction, magnifier])
+        )
+        let bytes = try normalizedBytes(of: result.image)
+        let redacted = editingPixel(bytes, width: 120, x: 30, y: 30)
+        let lensCenter = editingPixel(bytes, width: 120, x: 84, y: 84)
+        XCTAssertEqual(lensCenter, redacted)
+    }
+
+    func testAnnotationTranslationClampsToImageBounds() {
+        let annotation = ScreenshotAnnotation(
+            kind: .rectangle,
+            start: NormalizedPoint(x: 0.7, y: 0.7),
+            end: NormalizedPoint(x: 0.9, y: 0.9)
+        )
+        let moved = annotation.translated(x: 0.5, y: -1)
+        XCTAssertEqual(moved.bounds.maxX, 1, accuracy: 0.000_001)
+        XCTAssertEqual(moved.bounds.minY, 0, accuracy: 0.000_001)
+    }
 }
 
 private struct EditingColor: Equatable {

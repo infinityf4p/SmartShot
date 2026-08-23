@@ -14,18 +14,21 @@ public struct CaptureCandidate: Identifiable, Equatable, Sendable {
     public let source: Source
     public let label: String
     public let level: Int
+    public let windowID: CGWindowID?
 
     public init(
         id: UUID = UUID(),
         rect: CGRect,
         source: Source,
         label: String,
-        level: Int = 0
+        level: Int = 0,
+        windowID: CGWindowID? = nil
     ) {
         self.id = id
         self.rect = rect.standardized
         self.source = source
         self.label = label
         self.level = level
+        self.windowID = windowID
     }
 }

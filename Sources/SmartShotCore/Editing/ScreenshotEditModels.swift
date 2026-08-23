@@ -1,11 +1,18 @@
 import Foundation
 
 public enum ScreenshotEditingTool: String, CaseIterable, Equatable, Sendable {
+    case select
     case crop
+    case freehand
     case arrow
     case rectangle
+    case ellipse
     case text
     case mosaic
+    case blur
+    case redaction
+    case spotlight
+    case magnifier
     case counter
 }
 
@@ -86,10 +93,16 @@ public struct NormalizedRect: Equatable, Sendable {
 }
 
 public enum ScreenshotAnnotationKind: String, Equatable, Sendable {
+    case freehand
     case arrow
     case rectangle
+    case ellipse
     case text
     case mosaic
+    case blur
+    case redaction
+    case spotlight
+    case magnifier
     case counter
 }
 
@@ -102,6 +115,8 @@ public struct ScreenshotAnnotation: Identifiable, Equatable, Sendable {
     public let lineWidthPoints: Double
     public let text: String?
     public let counterValue: Int?
+    public let points: [NormalizedPoint]
+    public let magnification: Double
 
     public init(
         id: UUID = UUID(),
@@ -111,7 +126,9 @@ public struct ScreenshotAnnotation: Identifiable, Equatable, Sendable {
         color: ScreenshotColor = .red,
         lineWidthPoints: Double = 3,
         text: String? = nil,
-        counterValue: Int? = nil
+        counterValue: Int? = nil,
+        points: [NormalizedPoint] = [],
+        magnification: Double = 2
     ) {
         self.id = id
         self.kind = kind
@@ -121,6 +138,39 @@ public struct ScreenshotAnnotation: Identifiable, Equatable, Sendable {
         self.lineWidthPoints = max(1, min(24, lineWidthPoints))
         self.text = text
         self.counterValue = counterValue
+        self.points = Array(points.prefix(4_096))
+        self.magnification = max(1.25, min(4, magnification))
+    }
+
+    public var bounds: NormalizedRect {
+        let allPoints = points.isEmpty ? [start, end] : points + [start, end]
+        return NormalizedRect(
+            minX: allPoints.map(\.x).min() ?? start.x,
+            minY: allPoints.map(\.y).min() ?? start.y,
+            maxX: allPoints.map(\.x).max() ?? end.x,
+            maxY: allPoints.map(\.y).max() ?? end.y
+        )
+    }
+
+    public func translated(x deltaX: Double, y deltaY: Double) -> ScreenshotAnnotation {
+        let bounds = bounds
+        let safeX = min(1 - bounds.maxX, max(-bounds.minX, deltaX))
+        let safeY = min(1 - bounds.maxY, max(-bounds.minY, deltaY))
+        func moved(_ point: NormalizedPoint) -> NormalizedPoint {
+            NormalizedPoint(x: point.x + safeX, y: point.y + safeY)
+        }
+        return ScreenshotAnnotation(
+            id: id,
+            kind: kind,
+            start: moved(start),
+            end: moved(end),
+            color: color,
+            lineWidthPoints: lineWidthPoints,
+            text: text,
+            counterValue: counterValue,
+            points: points.map(moved),
+            magnification: magnification
+        )
     }
 }
 

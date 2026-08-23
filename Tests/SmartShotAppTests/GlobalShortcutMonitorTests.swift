@@ -170,6 +170,104 @@ final class GlobalShortcutMonitorTests: XCTestCase {
         monitor.endRecording()
     }
 
+    func testTransientEscapeHotKeyIsExclusiveAndReleasesOnStop() throws {
+        var actionCount = 0
+        let monitor = TransientEscapeHotKeyMonitor { actionCount += 1 }
+        let registration = monitor.start()
+        if case let .unavailable(status) = registration {
+            XCTAssertEqual(status, OSStatus(eventHotKeyExistsErr))
+            return
+        }
+        XCTAssertEqual(registration, .registered)
+        let activeID = try XCTUnwrap(monitor.activeID)
+
+        var blockedProbe: EventHotKeyRef?
+        XCTAssertEqual(
+            RegisterEventHotKey(
+                UInt32(kVK_Escape),
+                0,
+                EventHotKeyID(signature: 0x42535454, id: 94),
+                GetApplicationEventTarget(),
+                OptionBits(kEventHotKeyExclusive),
+                &blockedProbe
+            ),
+            OSStatus(eventHotKeyExistsErr)
+        )
+        if let blockedProbe { UnregisterEventHotKey(blockedProbe) }
+
+        monitor.receiveHotKey(withID: activeID &+ 1)
+        XCTAssertEqual(actionCount, 0)
+        monitor.receiveHotKey(withID: activeID)
+        XCTAssertEqual(actionCount, 1)
+        monitor.stop()
+
+        var releasedProbe: EventHotKeyRef?
+        XCTAssertEqual(
+            RegisterEventHotKey(
+                UInt32(kVK_Escape),
+                0,
+                EventHotKeyID(signature: 0x42535454, id: 95),
+                GetApplicationEventTarget(),
+                OptionBits(kEventHotKeyExclusive),
+                &releasedProbe
+            ),
+            noErr
+        )
+        if let releasedProbe { UnregisterEventHotKey(releasedProbe) }
+    }
+
+    func testTransientEscapeConflictIsReportedWithVisibleFallbackText() {
+        var actionCount = 0
+        var registrationCount = 0
+        let monitor = TransientEscapeHotKeyMonitor(
+            registrationHandler: { _, _ in
+                registrationCount += 1
+                return OSStatus(eventHotKeyExistsErr)
+            }
+        ) {
+            actionCount += 1
+        }
+
+        let registration = monitor.start()
+
+        XCTAssertEqual(registration, .unavailable(OSStatus(eventHotKeyExistsErr)))
+        XCTAssertEqual(registration.fallbackInstruction, "Esc unavailable - click Cancel")
+        XCTAssertEqual(
+            registration.detailText("Scroll down and pause"),
+            "Esc unavailable - click Cancel. Scroll down and pause"
+        )
+        XCTAssertEqual(registrationCount, 1)
+        XCTAssertNil(monitor.activeID)
+        monitor.receiveHotKey(withID: 1)
+        XCTAssertEqual(actionCount, 0)
+        monitor.stop()
+    }
+
+    func testTransientEscapeHotKeyRestartIgnoresStoppedAndStaleRegistrations() throws {
+        var actionCount = 0
+        let monitor = TransientEscapeHotKeyMonitor { actionCount += 1 }
+        let firstRegistration = monitor.start()
+        if case let .unavailable(status) = firstRegistration {
+            throw XCTSkip("Escape is already registered (status \(status)).")
+        }
+        let firstID = try XCTUnwrap(monitor.activeID)
+        monitor.receiveHotKey(withID: firstID)
+        XCTAssertEqual(actionCount, 1)
+
+        monitor.stop()
+        monitor.receiveHotKey(withID: firstID)
+        XCTAssertEqual(actionCount, 1)
+
+        XCTAssertEqual(monitor.start(), .registered)
+        let secondID = try XCTUnwrap(monitor.activeID)
+        XCTAssertNotEqual(secondID, firstID)
+        monitor.receiveHotKey(withID: firstID)
+        XCTAssertEqual(actionCount, 1)
+        monitor.receiveHotKey(withID: secondID)
+        XCTAssertEqual(actionCount, 2)
+        monitor.stop()
+    }
+
     private func testShortcut(keyCode: UInt32) -> KeyboardShortcutValue {
         KeyboardShortcutValue(
             keyCode: keyCode,

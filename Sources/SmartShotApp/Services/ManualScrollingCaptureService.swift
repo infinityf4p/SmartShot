@@ -393,23 +393,16 @@ struct ManualScrollingCaptureService {
         let previousImage = ManualSendableCGImage(previous)
         let currentImage = ManualSendableCGImage(current)
         let bodyHeight = max(1, previous.height - fixedTopHeightPixels)
-        let minimumOverlapHeight = max(24, Int(ceil(Double(bodyHeight) * 0.68)))
+        let overlapConfiguration = ManualLongCaptureOverlapPolicy.configuration(
+            bodyHeightPixels: bodyHeight,
+            fixedTopHeightPixels: fixedTopHeightPixels,
+            maximumInputPixelCount: configuration.maximumPixelCount
+        )
         let estimationTask = Task.detached(priority: .userInitiated) {
             try VerticalOverlapEstimator.estimate(
                 previous: previousImage.value,
                 current: currentImage.value,
-                configuration: VerticalOverlapEstimatorConfiguration(
-                    minimumOverlapHeightPixels: minimumOverlapHeight,
-                    maximumOverlapFraction: 0.999_999,
-                    horizontalInsetFraction: 0.10,
-                    fixedTopHeightPixels: fixedTopHeightPixels,
-                    maximumMeanAbsoluteDifference: 0.075,
-                    minimumConfidence: 0.48,
-                    maximumSampleRows: 160,
-                    maximumSampleColumns: 128,
-                    maximumInputPixelCount: 32_000_000,
-                    overlapPreferenceWeight: 0.012
-                )
+                configuration: overlapConfiguration
             )
         }
         return try await withTaskCancellationHandler {

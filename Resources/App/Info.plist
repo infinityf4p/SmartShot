@@ -10,6 +10,17 @@
 	<string>$(ASSETCATALOG_COMPILER_APPICON_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.infinityf4p.SmartShot.browser-import</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>smartshot</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -28,6 +39,8 @@
 	<false/>
 	<key>NSAccessibilityUsageDescription</key>
 	<string>SmartShot uses accessibility metadata to identify interface blocks under the pointer.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>SmartShot uses the microphone only when microphone audio is enabled for a screen recording.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>SmartShot needs screen access to capture the content you select.</string>
 	<key>NSPrincipalClass</key>

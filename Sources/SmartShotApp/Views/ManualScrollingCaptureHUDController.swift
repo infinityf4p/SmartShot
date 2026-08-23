@@ -10,6 +10,9 @@ final class ManualScrollingCaptureHUDController: NSObject {
     private weak var detailLabel: NSTextField?
     private weak var activityIndicator: NSProgressIndicator?
     private weak var doneButton: NSButton?
+    private var escapeHotKeyMonitor: TransientEscapeHotKeyMonitor?
+    private var escapeHotKeyRegistration: TransientEscapeHotKeyRegistration = .registered
+    private var cancellationRequested = false
 
     func show(relativeTo captureRect: CGRect) {
         hide()
@@ -109,35 +112,37 @@ final class ManualScrollingCaptureHUDController: NSObject {
         detailLabel = detail
         activityIndicator = indicator
         doneButton = done
+        cancellationRequested = false
+        installEscapeHotKey()
+        setDetail("Hold the region still")
     }
 
     func update(_ progress: ManualScrollingCaptureProgress) {
         switch progress.phase {
         case .preparing:
             titleLabel?.stringValue = "Preparing long capture"
-            detailLabel?.stringValue = detail("Hold the region still", progress: progress)
+            setDetail(detail("Hold the region still", progress: progress))
             activityIndicator?.startAnimation(nil)
             doneButton?.isEnabled = false
         case .ready:
             titleLabel?.stringValue = "Long capture ready"
-            detailLabel?.stringValue = detail("Scroll down and pause", progress: progress)
+            setDetail(detail("Scroll down and pause", progress: progress))
             activityIndicator?.stopAnimation(nil)
             doneButton?.isEnabled = false
         case .capturing:
             titleLabel?.stringValue = "\(progress.fragmentCount) sections captured"
-            detailLabel?.stringValue = detail(
+            setDetail(detail(
                 "\(Int(progress.logicalHeight)) points - continue or finish",
                 progress: progress
-            )
+            ))
             activityIndicator?.stopAnimation(nil)
             doneButton?.isEnabled = progress.fragmentCount > 1
         case .stitching:
             titleLabel?.stringValue = "Stitching \(progress.fragmentCount) sections"
-            detailLabel?.stringValue = "Checking the final image"
+            setDetail("Checking the final image")
             activityIndicator?.startAnimation(nil)
             doneButton?.isEnabled = false
         }
-        panel?.setAccessibilityValue(titleLabel?.stringValue)
     }
 
     private func detail(
@@ -152,23 +157,52 @@ final class ManualScrollingCaptureHUDController: NSObject {
     }
 
     func hide() {
+        removeEscapeHotKey()
         panel?.orderOut(nil)
         panel = nil
         titleLabel = nil
         detailLabel = nil
         activityIndicator = nil
         doneButton = nil
+        escapeHotKeyRegistration = .registered
     }
 
     @objc private func finishCapture() {
         doneButton?.isEnabled = false
         activityIndicator?.startAnimation(nil)
-        detailLabel?.stringValue = "Finishing the current section"
+        setDetail("Finishing the current section")
         onFinish?()
     }
 
     @objc private func cancelCapture() {
+        guard !cancellationRequested else { return }
+        cancellationRequested = true
+        removeEscapeHotKey()
         onCancel?()
+    }
+
+    private func installEscapeHotKey() {
+        removeEscapeHotKey()
+        let monitor = TransientEscapeHotKeyMonitor { [weak self] in
+            self?.cancelCapture()
+        }
+        escapeHotKeyRegistration = monitor.start()
+        if escapeHotKeyRegistration == .registered {
+            escapeHotKeyMonitor = monitor
+        }
+    }
+
+    private func removeEscapeHotKey() {
+        escapeHotKeyMonitor?.stop()
+        escapeHotKeyMonitor = nil
+    }
+
+    private func setDetail(_ detail: String) {
+        detailLabel?.stringValue = escapeHotKeyRegistration.detailText(detail)
+        let accessibilityValue = [titleLabel?.stringValue, detailLabel?.stringValue]
+            .compactMap { $0 }
+            .joined(separator: ". ")
+        panel?.setAccessibilityValue(accessibilityValue)
     }
 
     private func origin(for panelSize: CGSize, relativeTo captureRect: CGRect) -> CGPoint {
@@ -193,6 +227,6 @@ final class ManualScrollingCaptureHUDController: NSObject {
 }
 
 private final class ManualScrollingCapturePanel: NSPanel {
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }

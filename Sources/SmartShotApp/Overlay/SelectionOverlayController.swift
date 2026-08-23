@@ -23,6 +23,7 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
     enum Mode: Equatable, Sendable {
         case unified(CaptureSelectionMode)
         case scrollableArea
+        case recordingRegion
     }
 
     weak var delegate: SelectionOverlayControllerDelegate?
@@ -38,6 +39,7 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
     private var appliedRequest: AppliedCandidateRequest?
     private var pendingScrollingCommitPoint: CGPoint?
     private var candidateRequestID = 0
+    private var detectionGeneration = 0
     private var resolutionRequestID: Int?
     private var mode: Mode = .unified(.smart)
     private var keyMonitor: Any?
@@ -114,7 +116,7 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
         guard resolutionTask == nil else { return }
         guard mode.requiresCandidateDetection else { return }
         pendingScrollingCommitPoint = nil
-        if mode == .scrollableArea {
+        if mode.isScrollingSelection {
             renderStatus(.searchingForScrollArea)
         }
         if let window = overlay.window, !window.isKeyWindow {
@@ -125,7 +127,7 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
     }
 
     func overlay(_ overlay: SelectionOverlayView, didFinishAt globalPoint: CGPoint, manualRect: CGRect?) {
-        if mode == .scrollableArea {
+        if mode.isScrollingSelection {
             switch scrollingSelectionDecision(at: globalPoint) {
             case let .resolve(selection):
                 beginScrollingTargetResolution(selection)
@@ -156,8 +158,19 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
             guard let manualRect else { return }
             tearDown()
             delegate?.selectionOverlay(self, didSelectManualScrollingRect: manualRect)
+        case .unified(.appScroll):
+            break
         case .scrollableArea:
             break
+        case .recordingRegion:
+            guard let manualRect else { return }
+            let selected = CaptureCandidate(
+                rect: manualRect,
+                source: .manual,
+                label: "Screen Recording"
+            )
+            tearDown()
+            delegate?.selectionOverlay(self, didSelect: selected)
         }
     }
 
@@ -223,6 +236,8 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
     private func startPendingDetectionIfNeeded() {
         guard detectionTask == nil, let request = pendingRequest else { return }
         pendingRequest = nil
+        detectionGeneration &+= 1
+        let generation = detectionGeneration
         detectionTask = Task { [weak self] in
             let worker = Task.detached(priority: .userInitiated) {
                 Self.detectCandidates(
@@ -233,7 +248,9 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
                 )
             }
             let detection = await worker.value
-            guard let self else { return }
+            guard let self,
+                  !Task.isCancelled,
+                  generation == self.detectionGeneration else { return }
             self.detectionTask = nil
             if request.id == self.candidateRequestID, !self.windows.isEmpty {
                 self.applyCandidates(detection, for: request)
@@ -250,7 +267,7 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
     ) -> CandidateDetection {
         var next: [CaptureCandidate] = []
         let identityBefore: AccessibilityScrollTargetIdentity?
-        if case .scrollableArea = mode {
+        if mode.isScrollingSelection {
             identityBefore = AccessibilityScrollCaptureTarget.identity(at: point)
         } else {
             identityBefore = nil
@@ -271,8 +288,10 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
                     next.append(contentsOf: result.captureCandidates())
                 case .unified(.region), .unified(.long):
                     break
-                case .scrollableArea:
+                case .unified(.appScroll), .scrollableArea:
                     next.append(contentsOf: result.candidates.compactMap(scrollCandidate))
+                case .recordingRegion:
+                    break
                 }
             } catch {
                 // Partial or slow Accessibility trees must not block pointer input.
@@ -288,9 +307,9 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
                 candidates: CandidateFilter.normalized(next, within: desktopBounds),
                 targetIdentity: nil
             )
-        case .unified(.region), .unified(.long):
+        case .unified(.region), .unified(.long), .recordingRegion:
             return CandidateDetection(candidates: [], targetIdentity: nil)
-        case .scrollableArea:
+        case .unified(.appScroll), .scrollableArea:
             let identityAfter = AccessibilityScrollCaptureTarget.identity(at: point)
             guard let identityBefore, identityBefore == identityAfter else {
                 return CandidateDetection(candidates: [], targetIdentity: nil)
@@ -328,11 +347,11 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
             }
         } ?? 0
         renderCandidate()
-        if mode == .scrollableArea {
+        if mode.isScrollingSelection {
             renderStatus(candidates.isEmpty ? .unsupportedScrollArea : .scrollAreaReady)
         }
 
-        if mode == .scrollableArea,
+        if mode.isScrollingSelection,
            let commitPoint = pendingScrollingCommitPoint,
            request.id == candidateRequestID,
            request.point == commitPoint {
@@ -363,8 +382,7 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
             NSEvent.removeMonitor(keyMonitor)
             self.keyMonitor = nil
         }
-        debounceTask?.cancel()
-        debounceTask = nil
+        cancelCandidateWork()
         resolutionTask?.cancel()
         resolutionTask = nil
         resolutionRequestID = nil
@@ -438,9 +456,12 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
 
     private func failUnsupportedScrollingSelection() {
         tearDown()
+        let message = AXIsProcessTrusted()
+            ? "No controllable app scroll area was found here. For X and other webpages, use the SmartShot browser extension from the browser toolbar."
+            : "Allow Accessibility access to select and control an app scroll area."
         delegate?.selectionOverlay(
             self,
-            didFailWith: "No controllable app scroll area was found here. For X and other webpages, use the SmartShot browser extension from the browser toolbar."
+            didFailWith: message
         )
     }
 
@@ -457,11 +478,18 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
                 view.status = .regionSelection
             case .long:
                 view.status = .manualLongSelection
+            case .appScroll:
+                view.allowsManualSelection = false
+                view.status = .searchingForScrollArea
             }
         case .scrollableArea:
             view.showsModeToolbar = false
             view.allowsManualSelection = false
             view.status = .searchingForScrollArea
+        case .recordingRegion:
+            view.showsModeToolbar = false
+            view.allowsManualSelection = true
+            view.status = .recordingRegionSelection
         }
     }
 
@@ -469,6 +497,8 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
         debounceTask?.cancel()
         debounceTask = nil
         detectionTask?.cancel()
+        detectionTask = nil
+        detectionGeneration &+= 1
         pendingRequest = nil
     }
 
@@ -499,9 +529,18 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
 private extension SelectionOverlayController.Mode {
     var requiresCandidateDetection: Bool {
         switch self {
-        case .unified(.smart), .scrollableArea:
+        case .unified(.smart), .unified(.appScroll), .scrollableArea:
             true
-        case .unified(.region), .unified(.long):
+        case .unified(.region), .unified(.long), .recordingRegion:
+            false
+        }
+    }
+
+    var isScrollingSelection: Bool {
+        switch self {
+        case .unified(.appScroll), .scrollableArea:
+            true
+        case .unified(.smart), .unified(.region), .unified(.long), .recordingRegion:
             false
         }
     }

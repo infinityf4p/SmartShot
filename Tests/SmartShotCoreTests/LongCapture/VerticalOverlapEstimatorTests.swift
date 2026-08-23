@@ -188,6 +188,97 @@ final class VerticalOverlapEstimatorTests: XCTestCase {
         XCTAssertEqual(try normalizedBytes(of: stitched.image), try normalizedBytes(of: expected))
     }
 
+    func testManualPolicyStitchesRepeatedTextAcrossLargerScrollSteps() throws {
+        let width = 64
+        let headerHeight = 12
+        let bodyHeight = 100
+        let delta = 36
+        let frames = try [0, delta, delta * 2].map {
+            try makeRepeatedTextViewport(
+                width: width,
+                headerHeight: headerHeight,
+                bodyHeight: bodyHeight,
+                bodyStart: $0
+            )
+        }
+        let configuration = ManualLongCaptureOverlapPolicy.configuration(
+            bodyHeightPixels: bodyHeight,
+            fixedTopHeightPixels: headerHeight,
+            maximumInputPixelCount: 32_000_000
+        )
+        let firstEstimate = try VerticalOverlapEstimator.estimate(
+            previous: frames[0],
+            current: frames[1],
+            configuration: configuration
+        )
+        let secondEstimate = try VerticalOverlapEstimator.estimate(
+            previous: frames[1],
+            current: frames[2],
+            configuration: configuration
+        )
+
+        XCTAssertEqual(firstEstimate.scrollDeltaPixels, delta)
+        XCTAssertEqual(secondEstimate.scrollDeltaPixels, delta)
+
+        let stitched = try VerticalImageStitcher.stitch([
+            VerticalCaptureFragment(image: frames[0], verticalOffset: 0, scale: 1),
+            VerticalCaptureFragment(
+                image: frames[1],
+                verticalOffset: CGFloat(headerHeight + firstEstimate.scrollDeltaPixels),
+                scale: 1,
+                sourceTopInsetPixels: headerHeight
+            ),
+            VerticalCaptureFragment(
+                image: frames[2],
+                verticalOffset: CGFloat(
+                    headerHeight
+                        + firstEstimate.scrollDeltaPixels
+                        + secondEstimate.scrollDeltaPixels
+                ),
+                scale: 1,
+                sourceTopInsetPixels: headerHeight
+            ),
+        ])
+        let expected = try makeRepeatedTextViewport(
+            width: width,
+            headerHeight: headerHeight,
+            bodyHeight: bodyHeight + delta * 2,
+            bodyStart: 0
+        )
+
+        XCTAssertEqual(try normalizedBytes(of: stitched.image), try normalizedBytes(of: expected))
+    }
+
+    func testManualPolicyRejectsAmbiguousPeriodicContent() throws {
+        let width = 64
+        let bodyHeight = 100
+        let previous = try makePeriodicViewport(
+            width: width,
+            height: bodyHeight,
+            documentStart: 0,
+            period: 20
+        )
+        let current = try makePeriodicViewport(
+            width: width,
+            height: bodyHeight,
+            documentStart: 30,
+            period: 20
+        )
+        let configuration = ManualLongCaptureOverlapPolicy.configuration(
+            bodyHeightPixels: bodyHeight,
+            fixedTopHeightPixels: 0,
+            maximumInputPixelCount: 32_000_000
+        )
+
+        assertEstimationError(.noReliableOverlap) {
+            try VerticalOverlapEstimator.estimate(
+                previous: previous,
+                current: current,
+                configuration: configuration
+            )
+        }
+    }
+
     func testRejectsImagesWithoutReliableOverlap() throws {
         let previous = try makePatternImage(width: 48, height: 80, seed: 11)
         let current = try makePatternImage(width: 48, height: 80, seed: 193)
@@ -328,4 +419,66 @@ private func makeViewport(
         height: headerHeight + bodyHeight,
         bytes: bytes
     )
+}
+
+private func makeRepeatedTextViewport(
+    width: Int,
+    headerHeight: Int,
+    bodyHeight: Int,
+    bodyStart: Int
+) throws -> CGImage {
+    var bytes: [UInt8] = []
+    bytes.reserveCapacity(width * (headerHeight + bodyHeight) * 4)
+    for y in 0..<(headerHeight + bodyHeight) {
+        for x in 0..<width {
+            if y < headerHeight {
+                bytes.append(UInt8(38 + x % 9))
+                bytes.append(UInt8(72 + y % 7))
+                bytes.append(UInt8(104 + (x + y) % 11))
+            } else {
+                let documentY = bodyStart + y - headerHeight
+                let line = documentY / 8
+                let rowInLine = documentY % 8
+                let drawsGlyph = (2...4).contains(rowInLine)
+                    && x >= 6
+                    && x < width - 6
+                    && (x + line * 3) % 11 < 7
+                let shade = drawsGlyph ? UInt8(48 + line % 9) : UInt8(247)
+                bytes.append(shade)
+                bytes.append(shade)
+                bytes.append(shade)
+            }
+            bytes.append(255)
+        }
+    }
+    return try makeTestImage(
+        width: width,
+        height: headerHeight + bodyHeight,
+        bytes: bytes
+    )
+}
+
+private func makePeriodicViewport(
+    width: Int,
+    height: Int,
+    documentStart: Int,
+    period: Int
+) throws -> CGImage {
+    var bytes: [UInt8] = []
+    bytes.reserveCapacity(width * height * 4)
+    for localY in 0..<height {
+        let periodicY = (documentStart + localY) % period
+        for x in 0..<width {
+            let drawsGlyph = (3...6).contains(periodicY % 10)
+                && x >= 6
+                && x < width - 6
+                && (x + periodicY * 3) % 13 < 8
+            let shade = drawsGlyph ? UInt8(42 + periodicY) : UInt8(246)
+            bytes.append(shade)
+            bytes.append(shade)
+            bytes.append(shade)
+            bytes.append(255)
+        }
+    }
+    return try makeTestImage(width: width, height: height, bytes: bytes)
 }

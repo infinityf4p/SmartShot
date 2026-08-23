@@ -58,4 +58,28 @@ final class CaptureOcclusionPolicyTests: XCTestCase {
             )
         )
     }
+
+    func testDebugHostFilterDoesNotIgnoreNotificationCenter() {
+        XCTAssertFalse(
+            CaptureOcclusionPolicy.shouldIgnoreDebugTestHost(
+                applicationName: "Notification Center",
+                arguments: ["--debug-ignore-test-host-overlays"]
+            )
+        )
+    }
+
+    func testDebugHostFilterIgnoresOnlyKnownAutomationHostWhenEnabled() {
+        XCTAssertTrue(
+            CaptureOcclusionPolicy.shouldIgnoreDebugTestHost(
+                applicationName: "Codex",
+                arguments: ["--debug-ignore-test-host-overlays"]
+            )
+        )
+        XCTAssertFalse(
+            CaptureOcclusionPolicy.shouldIgnoreDebugTestHost(
+                applicationName: "Codex",
+                arguments: []
+            )
+        )
+    }
 }

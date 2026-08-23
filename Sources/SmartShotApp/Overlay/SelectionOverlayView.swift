@@ -3,6 +3,7 @@ import SmartShotCore
 
 enum SelectionOverlayStatus: Equatable {
     case regionSelection
+    case recordingRegionSelection
     case manualLongSelection
     case searchingForScrollArea
     case scrollAreaReady
@@ -13,6 +14,8 @@ enum SelectionOverlayStatus: Equatable {
         switch self {
         case .regionSelection:
             "Region capture"
+        case .recordingRegionSelection:
+            "Screen recording region"
         case .manualLongSelection:
             "Long capture region"
         case .searchingForScrollArea:
@@ -28,7 +31,7 @@ enum SelectionOverlayStatus: Equatable {
 
     var cursor: NSCursor {
         switch self {
-        case .regionSelection, .manualLongSelection:
+        case .regionSelection, .recordingRegionSelection, .manualLongSelection:
             .crosshair
         case .scrollAreaReady:
             .pointingHand
@@ -171,7 +174,7 @@ final class SelectionOverlayView: NSView {
         NSLayoutConstraint.activate([
             modeToolbar.centerXAnchor.constraint(equalTo: centerXAnchor),
             modeToolbar.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -22),
-            modeToolbar.widthAnchor.constraint(equalToConstant: 336),
+            modeToolbar.widthAnchor.constraint(equalToConstant: 456),
             modeToolbar.heightAnchor.constraint(equalToConstant: 50),
             stack.leadingAnchor.constraint(equalTo: modeToolbar.leadingAnchor, constant: 7),
             stack.trailingAnchor.constraint(equalTo: modeToolbar.trailingAnchor, constant: -7),

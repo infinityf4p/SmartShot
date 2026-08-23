@@ -19,6 +19,7 @@ struct SmartShotApp: App {
                     }
                     model.permissions.refresh()
                     model.startServices()
+                    applicationDelegate.installOpenURLHandler(model.handleOpenURL)
                 }
         }
         .windowResizability(.contentMinSize)
@@ -28,6 +29,19 @@ struct SmartShotApp: App {
                 Button("Automatic App Scroll (Experimental)") {
                     model.startScrollingCapture(origin: .mainWindow)
                 }
+                Button("Record Region") {
+                    model.startRegionRecording(origin: .mainWindow)
+                }
+                .disabled(model.isBusy)
+                Button("Record Current Display") {
+                    model.startDisplayRecording(origin: .mainWindow)
+                }
+                .disabled(model.isBusy)
+                if model.isScreenRecordingWorkflow {
+                    Button("Stop Screen Recording") { model.stopScreenRecording() }
+                        .disabled(!model.canStopScreenRecording)
+                    Button("Cancel Screen Recording") { model.cancelScreenRecording() }
+                }
                 Divider()
                 Button("Copy Latest Capture") { model.copyLatest() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
@@ -36,6 +50,9 @@ struct SmartShotApp: App {
                     .disabled(model.latestCapture == nil)
                 Button("Save Latest Capture...") { model.saveLatest() }
                     .keyboardShortcut("s", modifiers: [.command, .shift])
+                    .disabled(model.latestCapture == nil)
+                Button("Quick Save Latest Capture") { model.quickSaveLatest() }
+                    .keyboardShortcut("s", modifiers: [.command, .option])
                     .disabled(model.latestCapture == nil)
             }
         }
@@ -58,6 +75,15 @@ private struct MenuBarContent: View {
         Button("Capture", systemImage: "viewfinder") {
             model.startCapture(origin: .menuBar)
         }
+        Menu("Record", systemImage: "record.circle") {
+            Button("Region", systemImage: "crop") {
+                model.startRegionRecording(origin: .menuBar)
+            }
+            Button("Current Display", systemImage: "display") {
+                model.startDisplayRecording(origin: .menuBar)
+            }
+        }
+        .disabled(model.isBusy)
         Button(
             "Automatic App Scroll (Experimental)",
             systemImage: AppSymbol.scrollingCapture
@@ -65,6 +91,20 @@ private struct MenuBarContent: View {
             model.startScrollingCapture(origin: .menuBar)
         }
         .disabled(model.isBusy)
+        if model.isScreenRecordingWorkflow, model.state == .capturing {
+            if model.isFinalizingScreenRecording {
+                Text("Finalizing recording...")
+                    .font(.caption)
+            } else {
+                Button("Stop Recording", systemImage: "stop.circle.fill") {
+                    model.stopScreenRecording()
+                }
+                .disabled(!model.canStopScreenRecording)
+                Button("Cancel Recording", systemImage: "xmark.circle") {
+                    model.cancelScreenRecording()
+                }
+            }
+        }
         if model.isScrollingCapture, model.state == .capturing {
             if model.isManualScrollingCapture {
                 Button("Finish Long Capture", systemImage: "checkmark.circle") {
@@ -89,6 +129,17 @@ private struct MenuBarContent: View {
             .disabled(model.latestCapture == nil)
         Button("Save Latest...", systemImage: "square.and.arrow.down") { model.saveLatest() }
             .disabled(model.latestCapture == nil)
+        Button("Quick Save", systemImage: "bolt") { model.quickSaveLatest() }
+            .disabled(model.latestCapture == nil)
+        if model.latestRecording != nil {
+            Button("Reveal Recording", systemImage: "folder") {
+                model.revealLatestRecording()
+            }
+            Button("Export Recording as GIF...", systemImage: "photo.stack") {
+                model.exportLatestRecordingAsGIF()
+            }
+            .disabled(model.isExportingRecordingGIF)
+        }
         Divider()
         SettingsLink {
             Label("Settings...", systemImage: "gearshape")
@@ -105,6 +156,8 @@ private struct MenuBarContent: View {
 private final class SmartShotApplicationDelegate: NSObject, NSApplicationDelegate {
     private var terminationHandler: (() -> NSApplication.TerminateReply)?
     private var reopenHandler: (() -> Void)?
+    private var openURLHandler: ((URL) -> Void)?
+    private var pendingURLs: [URL] = []
 
     func installTerminationHandler(_ handler: @escaping () -> NSApplication.TerminateReply) {
         terminationHandler = handler
@@ -112,6 +165,21 @@ private final class SmartShotApplicationDelegate: NSObject, NSApplicationDelegat
 
     func installReopenHandler(_ handler: @escaping () -> Void) {
         reopenHandler = handler
+    }
+
+    func installOpenURLHandler(_ handler: @escaping (URL) -> Void) {
+        openURLHandler = handler
+        let queuedURLs = pendingURLs
+        pendingURLs.removeAll()
+        queuedURLs.forEach(handler)
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let openURLHandler else {
+            pendingURLs.append(contentsOf: urls)
+            return
+        }
+        urls.forEach(openURLHandler)
     }
 
     func applicationShouldHandleReopen(

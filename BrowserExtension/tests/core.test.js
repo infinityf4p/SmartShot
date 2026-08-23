@@ -2,7 +2,12 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 const Core = require("../shared/core.js");
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 test("intersectRect clips a block to the viewport", () => {
   assert.deepEqual(
@@ -120,6 +125,25 @@ test("protocol envelopes are versioned and type-checkable", () => {
   assert.equal(Core.isEnvelope(envelope, "capture.request"), true);
   assert.equal(Core.isEnvelope({ ...envelope, version: 2 }), false);
   assert.equal(Core.isEnvelope(envelope, "capture.response"), false);
+});
+
+test("generated request IDs remain native-compatible without Web Crypto", () => {
+  const sandbox = {
+    Date,
+    Math,
+    URL,
+    Uint8Array,
+    module: { exports: {} }
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(
+    fs.readFileSync(path.join(__dirname, "..", "shared", "core.js"), "utf8"),
+    sandbox,
+    { filename: "core.js" }
+  );
+
+  const requestId = sandbox.module.exports.makeEnvelope("capture.request", {}).requestId;
+  assert.match(requestId, UUID_PATTERN);
 });
 
 test("capturePixelRect uses observed image scale instead of assuming DPR", () => {

@@ -8,6 +8,7 @@ public struct VerticalOverlapEstimatorConfiguration: Equatable, Sendable {
     public var fixedTopHeightPixels: Int
     public var maximumMeanAbsoluteDifference: Double
     public var minimumConfidence: Double
+    public var minimumUniqueness: Double
     public var maximumSampleRows: Int
     public var maximumSampleColumns: Int
     public var maximumInputPixelCount: Int
@@ -20,6 +21,7 @@ public struct VerticalOverlapEstimatorConfiguration: Equatable, Sendable {
         fixedTopHeightPixels: Int = 0,
         maximumMeanAbsoluteDifference: Double = 0.035,
         minimumConfidence: Double = 0.82,
+        minimumUniqueness: Double = 0,
         maximumSampleRows: Int = 48,
         maximumSampleColumns: Int = 64,
         maximumInputPixelCount: Int = 50_000_000,
@@ -31,10 +33,40 @@ public struct VerticalOverlapEstimatorConfiguration: Equatable, Sendable {
         self.fixedTopHeightPixels = fixedTopHeightPixels
         self.maximumMeanAbsoluteDifference = maximumMeanAbsoluteDifference
         self.minimumConfidence = minimumConfidence
+        self.minimumUniqueness = minimumUniqueness
         self.maximumSampleRows = maximumSampleRows
         self.maximumSampleColumns = maximumSampleColumns
         self.maximumInputPixelCount = maximumInputPixelCount
         self.overlapPreferenceWeight = overlapPreferenceWeight
+    }
+}
+
+public enum ManualLongCaptureOverlapPolicy {
+    public static func configuration(
+        bodyHeightPixels: Int,
+        fixedTopHeightPixels: Int,
+        maximumInputPixelCount: Int
+    ) -> VerticalOverlapEstimatorConfiguration {
+        let normalizedBodyHeight = max(1, bodyHeightPixels)
+        let largestPossibleOverlap = max(1, normalizedBodyHeight - 1)
+        let preferredMinimumOverlap = max(
+            24,
+            Int(ceil(Double(normalizedBodyHeight) * 0.50))
+        )
+
+        return VerticalOverlapEstimatorConfiguration(
+            minimumOverlapHeightPixels: min(largestPossibleOverlap, preferredMinimumOverlap),
+            maximumOverlapFraction: 0.999_999,
+            horizontalInsetFraction: 0.10,
+            fixedTopHeightPixels: max(0, fixedTopHeightPixels),
+            maximumMeanAbsoluteDifference: 0.025,
+            minimumConfidence: 0.80,
+            minimumUniqueness: 0.08,
+            maximumSampleRows: 96,
+            maximumSampleColumns: 96,
+            maximumInputPixelCount: max(1, maximumInputPixelCount),
+            overlapPreferenceWeight: 0
+        )
     }
 }
 
@@ -281,6 +313,9 @@ public enum VerticalOverlapEstimator {
         )
         let uniquenessScale = max(0.005, configuration.maximumMeanAbsoluteDifference * 0.5)
         let uniqueness = clamped((secondRankingScore - best.rankingScore) / uniquenessScale)
+        guard uniqueness >= configuration.minimumUniqueness else {
+            throw VerticalOverlapEstimationError.noReliableOverlap
+        }
         let visualDetail = clamped(texture / 0.08)
         let relativeImprovement = clamped(
             (samePositionDifference - best.difference) / max(0.01, samePositionDifference)
@@ -317,6 +352,8 @@ private extension VerticalOverlapEstimator {
               configuration.maximumMeanAbsoluteDifference <= 1,
               configuration.minimumConfidence >= 0,
               configuration.minimumConfidence <= 1,
+              configuration.minimumUniqueness >= 0,
+              configuration.minimumUniqueness <= 1,
               configuration.maximumSampleRows > 0,
               configuration.maximumSampleColumns > 0,
               configuration.maximumInputPixelCount > 0,

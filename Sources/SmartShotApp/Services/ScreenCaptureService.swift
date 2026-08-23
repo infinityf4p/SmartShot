@@ -2,11 +2,13 @@ import AppKit
 import SmartShotCore
 import CoreGraphics
 import Foundation
+import ImageIO
 import ScreenCaptureKit
 
 enum ScreenCaptureError: LocalizedError {
     case permissionDenied
     case noDisplay
+    case selectionMustFitSingleDisplay
     case emptySelection
     case captureGeometryChanged
     case encodingFailed
@@ -17,6 +19,8 @@ enum ScreenCaptureError: LocalizedError {
             "Screen capture permission is required."
         case .noDisplay:
             "The selected content is not on an available display."
+        case .selectionMustFitSingleDisplay:
+            "The selected area must fit entirely on one available display."
         case .emptySelection:
             "The selected area is empty."
         case .captureGeometryChanged:
@@ -24,6 +28,50 @@ enum ScreenCaptureError: LocalizedError {
         case .encodingFailed:
             "The screenshot could not be encoded."
         }
+    }
+}
+
+struct ScreenCaptureDisplayMatch: Equatable, Sendable {
+    let displayIndex: Int
+    let captureRect: CGRect
+}
+
+enum ScreenCaptureDisplayGeometry {
+    static let defaultBoundaryTolerance: CGFloat = 0.5
+
+    static func match(
+        rect: CGRect,
+        displayFrames: [CGRect],
+        boundaryTolerance: CGFloat = defaultBoundaryTolerance
+    ) -> ScreenCaptureDisplayMatch? {
+        let rect = rect.standardized
+        guard isFinitePositive(rect) else { return nil }
+        let tolerance = boundaryTolerance.isFinite ? max(0, boundaryTolerance) : 0
+
+        for (index, rawFrame) in displayFrames.enumerated() {
+            let frame = rawFrame.standardized
+            guard isFinitePositive(frame),
+                  rect.minX >= frame.minX - tolerance,
+                  rect.minY >= frame.minY - tolerance,
+                  rect.maxX <= frame.maxX + tolerance,
+                  rect.maxY <= frame.maxY + tolerance else {
+                continue
+            }
+
+            // Absorb only sub-point coordinate rounding at a display edge.
+            let captureRect = rect.intersection(frame)
+            guard isFinitePositive(captureRect) else { continue }
+            return ScreenCaptureDisplayMatch(
+                displayIndex: index,
+                captureRect: captureRect
+            )
+        }
+        return nil
+    }
+
+    private static func isFinitePositive(_ rect: CGRect) -> Bool {
+        [rect.minX, rect.minY, rect.width, rect.height].allSatisfy(\.isFinite) &&
+            rect.width > 0 && rect.height > 0 && !rect.isNull && !rect.isInfinite
     }
 }
 
@@ -61,6 +109,31 @@ struct CapturedImage {
             cgImage: cgImage,
             image: NSImage(cgImage: cgImage, size: logicalRect.size),
             pngData: data,
+            logicalRect: logicalRect,
+            label: label
+        )
+    }
+
+    static func decoded(
+        pngData: Data,
+        logicalRect: CGRect,
+        label: String
+    ) throws -> CapturedImage {
+        guard pngData.count >= 8,
+              Array(pngData.prefix(8)) == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+              logicalRect.width.isFinite,
+              logicalRect.height.isFinite,
+              logicalRect.width > 0,
+              logicalRect.height > 0,
+              let source = CGImageSourceCreateWithData(pngData as CFData, nil),
+              CGImageSourceGetCount(source) == 1,
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            throw ScreenCaptureError.encodingFailed
+        }
+        return CapturedImage(
+            cgImage: image,
+            image: NSImage(cgImage: image, size: logicalRect.size),
+            pngData: pngData,
             logicalRect: logicalRect,
             label: label
         )
@@ -104,18 +177,26 @@ struct ScreenCaptureService {
         let cocoaRect = rect.standardized
         guard !cocoaRect.isEmpty else { throw ScreenCaptureError.emptySelection }
 
-        let center = CGPoint(x: cocoaRect.midX, y: cocoaRect.midY)
-        guard
-            let screen = NSScreen.screens.first(where: { $0.frame.contains(center) }),
-            let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
-            let display = content.displays.first(where: { $0.displayID == displayID })
-        else {
-            throw ScreenCaptureError.noDisplay
+        let capturableDisplays: [(screen: NSScreen, display: SCDisplay)] = NSScreen.screens.compactMap { screen in
+            guard let displayID = screen.deviceDescription[
+                NSDeviceDescriptionKey("NSScreenNumber")
+            ] as? CGDirectDisplayID,
+                  let display = content.displays.first(where: { $0.displayID == displayID }) else {
+                return nil
+            }
+            return (screen, display)
+        }
+        guard !capturableDisplays.isEmpty else { throw ScreenCaptureError.noDisplay }
+        guard let displayMatch = ScreenCaptureDisplayGeometry.match(
+            rect: cocoaRect,
+            displayFrames: capturableDisplays.map { $0.screen.frame }
+        ) else {
+            throw ScreenCaptureError.selectionMustFitSingleDisplay
         }
 
-        let clippedCocoaRect = cocoaRect.intersection(screen.frame)
-        guard !clippedCocoaRect.isEmpty else { throw ScreenCaptureError.emptySelection }
-        let quartzRect = ScreenGeometry.cocoaToQuartz(clippedCocoaRect)
+        let display = capturableDisplays[displayMatch.displayIndex].display
+        let captureRect = displayMatch.captureRect
+        let quartzRect = ScreenGeometry.cocoaToQuartz(captureRect)
         let sourceRect = CGRect(
             x: quartzRect.minX - display.frame.minX,
             y: quartzRect.minY - display.frame.minY,
@@ -123,12 +204,18 @@ struct ScreenCaptureService {
             height: quartzRect.height
         )
 
-        let currentApp = content.applications.filter {
+        var excludedApplications = content.applications.filter {
             $0.processID == ProcessInfo.processInfo.processIdentifier
         }
+        excludedApplications.append(contentsOf: content.applications.filter {
+            CaptureOcclusionPolicy.shouldIgnoreDebugTestHost(
+                applicationName: $0.applicationName,
+                bundleIdentifier: $0.bundleIdentifier
+            )
+        })
         let filter = SCContentFilter(
             display: display,
-            excludingApplications: currentApp,
+            excludingApplications: excludedApplications,
             exceptingWindows: []
         )
         let scale = CGFloat(filter.pointPixelScale)
@@ -144,7 +231,7 @@ struct ScreenCaptureService {
         return PreparedScreenCapture(
             filter: filter,
             configuration: configuration,
-            logicalRect: clippedCocoaRect
+            logicalRect: captureRect
         )
     }
 }

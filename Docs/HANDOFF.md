@@ -1,145 +1,156 @@
-# SmartShot Documentation Handoff
+# SmartShot Handoff
 
-## Implementation Snapshot
+## Snapshot
 
-Use this as the source-of-truth checklist when updating the root README or release notes.
+This document reflects the checkout on 2026-08-24. Keep these evidence classes separate:
 
-| Capability | Current Classification | Exact Boundary |
+- **Implemented**: code and a user-facing entry point exist.
+- **Automated coverage**: checked-in deterministic tests cover the named logic.
+- **GUI verified**: a recorded signed-app or privileged runtime scenario passed.
+- **GUI pending**: the real permission, installation, browser, display, or interaction path has not been recorded.
+- **Foundation only**: reusable code exists without a complete user workflow. No current capability in the table should be promoted from this label without an entry point and acceptance boundary.
+
+A successful build, a green unit test, a configured native-host manifest, and a real end-to-end capture are different facts.
+
+## Current Capability Boundary
+
+| Capability | State | Evidence and limit |
 | --- | --- | --- |
-| Native AX/window/manual selection | Implemented | Runtime matrix still needs recorded verification. |
-| Native static capture | Implemented | ScreenCaptureKit; visible region on one display. |
-| Unified Smart/Region/Long overlay | Implemented, final GUI matrix in progress | One shortcut exposes all three modes. |
-| Manual Long | Implemented, final GUI matrix in progress | Fixed one-display region; verified overlaps, conservative fixed-top handling, and automatic bottom finish after a no-movement scroll attempt. |
-| Native crop/annotation editor and output | Implemented, editor GUI verified | Crop, arrow, rectangle, text, mosaic, numbered markers, undo/redo, zoom, copy, pin, and PNG save. |
-| Capture delay | Implemented | Off, 3 seconds, or 5 seconds. |
-| Global shortcut | Implemented | Configurable in Settings with validation, conflict rollback, and persistence. |
-| Full-screen app overlay | Implemented | Non-activating panels preserve the target app/Space; external preview is opt-in. |
-| Native `Automatic App Scroll (Experimental)` | Implemented, controlled runtime verified | Static, single-display AX scroll area with writable vertical scrollbar; bounded to 24 fragments/75 seconds/16,384 px per side/32M pixels. |
-| Safari WebExtension target | Builds | Embedded target, not evidence of working DOM-to-native capture. |
-| Safari DOM native bridge | Not implemented | Handler returns `accepted: false`; no native web provider or coordinate mapper. |
-| Safari/X GUI path | Experimental/unverified | No real Safari/X end-to-end GUI evidence yet. |
-| Browser DOM whole-block capture | Implemented, GUI unverified | One-frame fast path plus bounded page scroll/crop/stitch path; real Chrome/Safari + X E2E outstanding. |
-| General-purpose long screenshot | Not implemented/promised | Dynamic/infinite/virtualized/nested/cross-display content is outside the current contract. |
-| Recording/OCR/advanced redaction | Not implemented | Basic annotation is implemented; do not imply blur/object removal/semantic redaction. |
+| Smart, Region, and nested selection | Implemented | Signed Smart and Region captures plus four-mode overlay Escape cancellation were recorded on 2026-08-23. Screen Recording is required; AX blocks need Accessibility. Global-hotkey/full-screen and broader display cases remain pending. |
+| Manual Long | Implemented | A controlled three-fragment TextEdit workflow was recorded on 2026-08-23. One fixed single-display region, user scrolls downward; 24 fragments, 5 minutes, 20,000 logical points, 16,384 px per axis, 32 million pixels. |
+| Automatic App Scroll (Experimental) | Implemented | A controlled static `NSScrollView` success and forced-timeout restoration were recorded on 2026-08-15. Static single-display AX scroll area with a writable vertical scrollbar only; 24 fragments, 75 seconds, 20,000 logical points, 16,384 px per axis, 32 million pixels. |
+| Editor and output | Implemented | Pixel tests cover all current raster/vector effects. An earlier GUI run covered the basic subset; freehand, ellipse, blur, opaque redaction, spotlight, magnifier, select/move/delete, and OCR-assisted redaction still need GUI acceptance. PNG/JPEG, Copy, Pin, Save, Quick Save, and Flatten exist. |
+| OCR and sensitive-text assistance | Implemented | Vision tiling/geometry, reading order, deduplication, cancellation, and validators have tests. Real OCR accuracy, language behavior, UI, and redaction placement remain GUI pending. |
+| History | Implemented | Local PNG/thumbnail/metadata persistence, retention, replacement, search, load, delete, and clear have store coverage. UI exposes search/list/open/delete/clear and 10/25/50/100/250 retention. OCR indexing is a separate opt-in and is forbidden for Private captures. |
+| Private capture mode | Implemented | A signed capture left the existing six-item history unchanged. Policy tests also cover automatic clipboard suppression. Private mode does not block explicit Copy, Pin, Save, Quick Save, or browser fallback downloads. |
+| URL scheme and CLI | Implemented | The installed `capture`, `quick-save`, `show`, help, and invalid-input paths were exercised. Capture and Quick Save did not activate SmartShot in the controlled TextEdit run; another app's full-screen Space remains pending. Show activates SmartShot. CLI is embedded, fire-and-forget, and not installed on `PATH`. |
+| Chromium/Safari native preview import | Implemented | Two-phase bridge staging then app validation/preview; final acceptance waits for the app. Long slices use heuristic two-frame pixel checks. One outstanding import is allowed, and background-owned fallback survives page teardown when `downloads` is available. Real signed extension installation, current X, site permissions, zoom, and preview import remain GUI pending. |
+| Screen recording | Implemented; partially GUI verified | A 22.18-second 994 x 622 H.264 region recording, in-app preview, Save As, and 333-frame GIF export were recorded on 2026-08-23. The run intentionally had system audio, microphone, and pointer off; display capture, audio/A-V sync, sustained operation, permissions, and failure cases remain pending. |
 
-## README Rules
+## Build and Install
 
-- Say `configurable shortcut` with `Control-Shift-2` initial default and transactional conflict rollback.
-- Describe the post-capture editor exactly: crop, arrows, rectangles, text, mosaic, numbered markers, undo/redo, reset, and zoom; Copy/Pin/Save render the current edits.
-- Describe AX/window/manual selection as implemented; qualify runtime support with the actual test record.
-- Describe the Safari extension target as embedded and buildable.
-- Describe Safari DOM-to-native integration and X native capture as Experimental/unverified.
-- State explicitly that the handler returns `accepted: false` and the native bridge/coordinate mapping are absent.
-- Describe browser DOM whole-block capture as implemented and automated-tested: one-frame fast path for visible blocks and bounded page scroll/crop/stitch for taller or partially offscreen blocks.
-- State that real Chrome/Safari + X E2E is outstanding; do not infer Safari success from `accepted: false` or shared code alone.
-- Distinguish unified **Long** (manual scroll, no AX requirement, no automatic scroll restoration) from **Automatic App Scroll (Experimental)** (AX/static/single-display requirements and restoration behavior).
-- Keep general-purpose dynamic/infinite/virtualized/nested/cross-display long screenshots, recording, OCR, history, object removal, and semantic redaction in the absent/not-promised list.
+Requirements: macOS 14+, a recent compatible Xcode, XcodeGen, and Node.js.
 
-## Suggested README Status Table
+```sh
+xcodegen generate
+xcodebuild -project SmartShot.xcodeproj \
+  -scheme SmartShot \
+  -configuration Debug \
+  -derivedDataPath DerivedData \
+  test CODE_SIGNING_ALLOWED=NO
 
-```text
-| Capability | Status | Limit |
-| Native AX/window/manual selection | Implemented | Real display/permission matrix still being recorded. |
-| ScreenCaptureKit still capture | Implemented | Visible selection clipped to one display. |
-| Crop/annotation editor, copy, pin, PNG save | Implemented | Basic local editor; no history, blur, object removal, or semantic redaction. |
-| Unified Smart/Region/Long | Implemented, GUI matrix in progress | One shortcut opens all modes; manual Long does not require AX. |
-| Global shortcut | Implemented | Settings recorder, persistence, conflict rollback, and Restore Default. |
-| Native Automatic App Scroll (Experimental) | Implemented, controlled runtime verified | Static, one-display AX scroll area with writable vertical scrollbar; 24 fragments/75 seconds/16,384 px per side/32M pixels. |
-| Browser DOM whole-block capture | Implemented, GUI unverified | Fast path plus bounded page scroll/crop/stitch; Chrome/Safari + X E2E outstanding. |
-| Safari extension target | Experimental | Builds, but handler declines native requests. |
-| Safari/X DOM-to-native capture | Not implemented | Bridge and GUI verification outstanding. |
-| General-purpose long capture, recording, OCR, advanced redaction | Not included | Bounded long paths do not cover dynamic/infinite/virtualized/nested/cross-display content. |
+cd BrowserExtension
+npm test
 ```
 
-## Current User Flow to Document
+For real permission, URL-scheme, Safari, and Chromium checks, build with the configured local signing identity or intentionally configured development-team signing, then install the complete bundle as `/Applications/SmartShot.app`. The post-build phase embeds:
 
-1. Launch the native app.
-2. Grant Screen Recording for screenshots.
-3. Optionally grant Accessibility for AX block detection.
-4. Press the shortcut shown in the sidebar (normally `Control-Shift-2`) or choose Capture.
-5. Choose Smart, Region, or Long in the bottom overlay toolbar.
-6. Select a Smart block or drag a region; in Long, scroll downward in small steps and finish from the HUD if automatic bottom detection does not finish first.
-7. Crop or annotate the result, then copy it, pin it, or save it as PNG.
+- `Contents/Helpers/SmartShotNativeHost`
+- `Contents/Helpers/smartshot`
+- `Contents/PlugIns/SmartShot Safari Extension.appex`
 
-Document **Automatic App Scroll (Experimental)** as a separate advanced command, not as an automatic behavior of Smart or manual Long. It requires both Screen Recording and Accessibility permissions and a selected AX scroll area with a writable vertical scrollbar. It captures a static viewport repeatedly on one display, stitches verified overlaps, and attempts to restore the original scrollbar value after success, failure, or cancellation. The hard limits are 24 fragments, 75 seconds, 16,384 pixels on either side, and 32,000,000 pixels total; restoration failure is an explicit error.
+An older app already present in `/Applications` is not evidence that these helpers are current. Inspect the installed bundle before GUI testing.
 
-Controlled privileged-GUI evidence recorded on 2026-08-15: a static native `NSScrollView` produced a 2,688 x 8,724 pixel PNG with fixture rows 001 through 240 and restored the same process's AX scrollbar from and to `0.5790314500417478`. A forced timeout also restored that exact value. Native cancellation restoration remains covered by automated state-machine tests rather than a recorded GUI run.
+The current local release artifact is self-signed, not Developer ID signed or notarized. Gatekeeper can require explicit Finder **Open** or **Privacy & Security** approval after download. Do not represent a passing build, local launch, or existing TCC permission as clean-machine distribution acceptance.
 
-## Permission Wording
+The 2026-08-24 installed Release artifact was built universal, passed strict deep signature verification, matched the staged app byte-for-byte, launched successfully, and remained alive through repeated Safari status refreshes. That verifies this installed artifact and the status callback fix only; it does not pass Gatekeeper, browser, or capture acceptance.
 
-| Missing Permission | Current Degraded Behavior |
-| --- | --- |
-| Screen Recording | Native screenshot cannot complete. |
-| Accessibility | Window and manual candidates remain available. |
-| Accessibility for Scrolling Capture | Experimental scrolling capture cannot select/control an AX scroll area. |
-| Safari site access | Browser-local DOM capture is unavailable until extension access is granted; the Safari path remains GUI-unverified. |
+## Browser Setup
 
-Do not present Safari permission recovery as a completed native workflow until it has been GUI-tested.
+Follow [BrowserExtension/README.md](../BrowserExtension/README.md).
 
-## Browser Wording
+Chromium support currently covers Google Chrome, Chromium, Microsoft Edge, and Brave. SmartShot Settings writes a per-browser `com.infinityf4p.smartshot.json` native-host manifest only when the complete app is at `/Applications/SmartShot.app`. **Connected** means those manifests match the expected helper and pinned extension origin; it does not prove that the unpacked extension is loaded, has site access, or completed a capture.
 
-The extension implements one-frame browser capture for a fully visible candidate and bounded scrolling capture for a taller or partially offscreen DOM element. The long path scrolls the page, captures ordered visible-tab slices, uses the actual image-to-viewport scale for cropping, stitches one PNG, restores scroll/styles, and downloads locally. It is limited to 24 slices, 20,000 CSS pixels of target height, 16,384 pixels per output side, 32,000,000 output pixels, and 20 seconds. It rejects targets wider than the available page viewport, inside a nested scroll area, or rooted in a fixed/sticky container.
+The unpacked extension inside the installed app is `/Applications/SmartShot.app/Contents/PlugIns/SmartShot Safari Extension.appex/Contents/Resources`. Chromium's Developer mode and **Load unpacked** controls are protected, user-controlled browser UI. SmartShot can configure the native host and reveal packaged files, but it does not and should not claim to complete extension installation automatically.
 
-Pure geometry/protocol tests pass, including slice planning and tab/document failure handling. Real Chrome/Safari + X GUI runs are still required. Do not describe the shared extension implementation as verified browser compatibility.
+Both browsers first validate and stage a completed browser-produced PNG through strict `begin -> chunk -> end` messages, then open SmartShot and wait for app validation and preview publication before returning the accepted end acknowledgement. `AppModel` allows one outstanding browser import. Native failure or overlap first uses the extension background's `downloads` API so fallback does not depend on the content page; a live content page remains a second fallback. The extension does not inspect download history.
 
-For Safari, keep these facts together:
+Chromium holds the staged image in the bounded Application Support store. Safari moves it through request-scoped named pasteboards because the sandboxed extension and containing app do not share that private directory. Normal paths validate and clean up the boards, but the channel has no cryptographic source authentication against another process running as the same macOS user, and an extension crash after publication can leave bounded request residue. Treat both as accepted P2 boundaries of this local self-signed release.
 
-- The extension target is embedded and builds.
-- The handler returns `accepted: false`.
-- DOM candidates do not enter the native selection pipeline.
-- DOM CSS-to-AppKit coordinate mapping is absent.
-- Real Safari/X GUI behavior has not been verified.
+For the local self-signed development build, Safari must have **Settings > Developer > Allow unsigned extensions** enabled before the extension can appear and be enabled. Safari resets that development setting whenever it quits. Do not require this override for a future Apple-signed distribution build.
 
-The shared code contains a Safari browser-local fallback, but do not infer that it works in Safari merely from Chrome behavior or from the handler's `handledBy: browser` label. Safari `captureVisibleTab`, download, page restoration, site access, and X interaction still need real GUI verification.
+Do not describe the browser path as DOM-to-AppKit coordinate mapping. The current design captures/crops/stitches in the browser and imports the completed PNG.
 
-## Privacy Wording
+## Automation
 
-Current extension tests establish that candidate messages omit page title, selector, author label, and post text, and retain only the HTTP(S) origin rather than credentials, path, query, or fragment. Current native capture is local and stored in memory unless explicitly saved.
+Public local commands are:
 
-Before making broader privacy claims, verify the release build and runtime logs. Never ask users to publish private X timelines, cookies, page HTML, full AX values, or URLs with sensitive parameters.
+```text
+smartshot://capture?mode=smart
+smartshot://capture?mode=region
+smartshot://capture?mode=long
+smartshot://capture?mode=app-scroll
+smartshot://quick-save
+smartshot://show
+```
 
-## Test Evidence to Link
+The bundled launcher accepts `capture [--mode smart|region|long|app-scroll]`, `quick-save`, `show`, and `--help`. It calls LaunchServices and exits; it does not wait for capture completion or report an output file. Capture and Quick Save request non-activating delivery, which passed in a controlled TextEdit run; another app's full-screen Space remains pending. Show activates SmartShot. `smartshot://import` is internal to the validated browser bridge.
 
-- Native unit coverage: AX screen layout, Accessibility detector, candidate filter.
-- Native long-capture unit coverage: overlap estimator, fixed-top detector, vertical stitcher, and manual completion policy; controlled AX/ScreenCaptureKit success and timeout restoration are recorded, while the broader real-app matrix remains outstanding.
-- Browser unit coverage: geometry, slice planning, limits, sanitized URL, protocol, observed-scale crop, ordered session/tab/document failures, filenames.
-- Chrome/Safari browser whole-block capture: GUI test outstanding; record browser version, X/fixture scenario, seams, restoration, and failure behavior for a public compatibility statement.
-- Native privileged GUI matrix: outstanding unless a newer test record says otherwise.
-- Safari/X real GUI matrix: outstanding.
+## Storage and Privacy
 
-Link to `Docs/TEST_PLAN.md` for detailed gates. Do not turn planned matrix items into check marks without a test record.
+- History is enabled by default under `~/Library/Application Support/SmartShot/History` and stores a PNG, JPEG thumbnail, and JSON metadata for each retained item. The UI supports search, open, delete, confirmed clear, and retention limits.
+- Search always covers labels and saved-file basenames. OCR text joins the local index only after the separate off-by-default opt-in and an OCR run; Private captures never persist OCR index text.
+- Private mode suppresses only automatic history and automatic copy. The latest preview remains in memory and explicit output actions still work.
+- Quick Save writes atomically to the configured folder, initially `~/Pictures/SmartShot`; Save uses a panel. Output can be PNG or JPEG.
+- Vision OCR and sensitive-pattern detection run locally. Detected classes currently include email, phone, Luhn-valid payment-card numbers, and checksum/date-valid Chinese national IDs.
+- Opaque redaction is the privacy tool. Blur and mosaic are visual effects and must not be represented as irreversible sanitization.
+- Browser import includes PNG bytes, safe kind/filename, logical dimensions, and an HTTP(S) origin. It excludes post text, author, title, selector, HTML, credentials, path, query, fragment, cookies, and browsing history.
+- Screen recordings are local H.264/AAC MP4 files in the Quick Save folder, outside screenshot history and Private capture policy. Microphone is off by default and separately permissioned. GIF export is silent and bounded to 30 seconds, 15 fps, 1,280 px, and 450 frames.
+- There is no analytics, upload endpoint, account, cloud sharing, or synchronization.
 
-## Known Limitations List
+## Long Capture Claims
 
-- Basic post-capture crop and annotation editing is implemented; there is no persistent edit history, blur, freehand drawing, object removal, or semantic redaction.
-- Native scrolling capture is Experimental and limited to a static, single-display AX scroll area with a writable vertical scrollbar.
-- Browser DOM whole-block capture is implemented but still lacks real Chrome/Safari + X E2E verification.
-- Dynamic/infinite content, virtualized lists, nested scrolling areas, cross-display composition, and general-purpose long capture are not promised.
-- No automatic X thread/multi-post capture.
-- No screen recording or audio.
-- No OCR, translation, text search, or sensitive-data recognition.
-- No capture history, cloud share, account, or sync; pinning is implemented.
-- Canvas, games, remote desktops, and inaccessible content may require manual selection.
-- Cross-display native selections are clipped to the display containing the selection center.
-- Safari DOM/X native capture is not implemented.
+Keep the three contracts distinct:
 
-## Documentation Map
+1. **Manual Long** captures a fixed rectangle while the user scrolls. It does not restore the user's scroll position or know the semantic end of a post.
+2. **Automatic App Scroll (Experimental)** drives one writable AX scrollbar, validates static geometry/pixels, and attempts exact restoration after success, failure, or cancellation.
+3. **Browser whole-block capture** selects one DOM element, uses a visible fast path or bounded page scrolling, restores page state, and imports or downloads one PNG.
 
-- `MVP_REQUIREMENTS.md`: current scope, Experimental Safari boundary, privacy, and exclusions.
-- `ARCHITECTURE.md`: current code path versus target DOM bridge.
-- `TEST_PLAN.md`: existing evidence versus outstanding promotion gates.
-- `ROADMAP.md`: hardening and future milestones.
-- `BrowserExtension/README.md`: extension-specific developer instructions.
+None promises dynamic/infinite feeds, virtualized lists, nested scrolling, cross-display composition, horizontal scrolling, or automatic X thread/multi-post capture.
 
-## Pre-Release Claim Audit
+## Recorded Evidence
 
-- [ ] Root README describes the configurable shortcut and full-screen Space behavior accurately.
-- [ ] Root README describes the implemented editor and edited-output behavior accurately.
-- [ ] Root README says Safari target builds but native bridge is absent.
-- [ ] Root README does not call X/Safari DOM capture supported.
-- [ ] Browser whole-block capture is described as implemented and automated-tested, with real Chrome/Safari + X E2E outstanding.
-- [ ] Automatic native scrolling is named `Automatic App Scroll (Experimental)` and includes AX/static/single-display requirements, limits, and restoration behavior.
-- [ ] Native runtime claims cite the actual GUI matrix performed.
-- [ ] Browser claims cite browser/version and actual test performed.
-- [ ] General-purpose dynamic/infinite/virtualized/nested/cross-display long capture remains unpromised; recording, OCR, history, object removal, and semantic redaction remain excluded.
-- [ ] No architecture target is presented as current code.
+- The Swift/XCTest gate passed **199/199** on 2026-08-24.
+- The BrowserExtension Node gate passed **67/67** on 2026-08-24.
+- A fresh universal Release app on 2026-08-24 passed strict deep signature verification, was installed byte-identically at `/Applications/SmartShot.app`, launched, and survived repeated Safari status refreshes without a new crash.
+- Exactly 32 stale temporary Safari-extension registrations were removed on 2026-08-24, leaving one registration for `/Applications/SmartShot.app/Contents/PlugIns/SmartShot Safari Extension.appex`. SmartShot status then changed from an extension-manager error to **installed but disabled**. This records environment repair and status recovery, not extension enablement or capture success.
+- The post-capture editor basic subset was exercised from a signed Debug fixture on 2026-08-19: tool switching, text/counter placement, undo/redo, 150% zoom, and Pin.
+- Controlled automatic AX scrolling on 2026-08-15 produced a 2,688 x 8,724 PNG containing rows 001 through 240 and restored the exact original scrollbar value; a forced timeout restored the same value.
+- The BrowserExtension Node suite covers X/generic DOM fixtures, restoration guards, bounded geometry, strict import ACKs, and fallback behavior.
+- The native test targets contain coverage for import storage, Chromium manifest installation, URL/CLI parsing, history, private policy, output encoding, OCR support logic, editor rendering, shortcut registration, and long-capture algorithms.
+- Recording tests cover source/size planning, state/routing, H.264/AAC configuration, cleanup, and a synthetic offline MP4-to-GIF export path.
+- The installed Release app recorded Smart and Region captures, a three-fragment Manual Long result, overlay Escape cancellation, Pin, Quick Save, and Private history suppression on 2026-08-23.
+- The installed CLI exercised capture modes without activating SmartShot, Quick Save output, activating Show, help, and invalid input on 2026-08-23.
+- A live region recording on 2026-08-23 produced a 22.18-second 994 x 622 H.264 MP4, remained in the same app process for preview, completed Save As, and exported a 994 x 622 333-frame GIF. Audio and microphone were disabled for this narrow run.
+
+Do not turn checked-in coverage into a passing-current-suite claim unless the final `xcodebuild test` result for the current checkout is recorded.
+
+## Remaining Acceptance Work
+
+- Clean-machine signing/Gatekeeper verification beyond the installed self-signed bundle.
+- Gatekeeper behavior for the current self-signed artifact on a clean or newly downloaded copy; Developer ID signing/notarization is not complete.
+- Screen Recording and Accessibility denial/grant/revoke recovery.
+- Frontmost-app shortcut delivery, full-screen Spaces, mixed displays/scales, negative origins, and overlay teardown.
+- Complete editor/OCR/history search/retention/restart GUI workflow beyond the recorded subset and Private history check.
+- Public controlled Chrome, Safari, and X fast/long capture with native preview and fallback evidence, including the `downloads` permission prompt, page teardown, Safari API degradation, toolbar diagnostics, and dynamic-media false-positive/false-negative checks.
+- Explicitly load the unpacked extension in Chromium and enable the Safari extension after the local unsigned-extension development override; neither protected browser action is counted as complete until observed.
+- Safari named-pasteboard cleanup after forced timeout/crash and same-user interference behavior, without treating the current P2 boundary as authenticated IPC.
+- Remaining URL/CLI collision, failure, active-operation, and full-screen-hotkey cases.
+- Recording still needs current-display, system audio, microphone, A/V sync, Cancel, display changes, sustained duration, and failure-cleanup checks.
+
+## Claim Rules
+
+- Say **implemented with automated coverage and a narrow signed GUI subset** for OCR, history, private mode, and automation until their complete matrices are recorded. Browser import remains GUI pending until a real extension capture reaches native preview.
+- Keep **Experimental** in the name of Automatic App Scroll.
+- Say **implemented with focused automated coverage and one narrow live region/video-only check** for screen recording until the recording matrix passes.
+- Never claim general-purpose long screenshots, automatic X threads, guaranteed OCR/sensitive detection, object removal, translation, cloud sharing, or sync.
+- Never publish private X timelines, screenshot pixels, cookies, page HTML, full AX values, or sensitive URLs as test evidence.
+
+## Key Files
+
+- `README.md`: public status and use.
+- `Docs/MVP_REQUIREMENTS.md`: current supported scope and exclusions.
+- `Docs/ARCHITECTURE.md`: implementation boundaries and data flow.
+- `Docs/TEST_PLAN.md`: promotion gates and test-record template.
+- `Docs/ROADMAP.md`: remaining product work.
+- `BrowserExtension/README.md`: browser install, protocol, limits, and fallback.
