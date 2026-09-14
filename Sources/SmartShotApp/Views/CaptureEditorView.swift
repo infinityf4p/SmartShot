@@ -2,10 +2,33 @@ import AppKit
 import SmartShotCore
 import SwiftUI
 
+private struct ToolbarItemFramesKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+private extension View {
+    func toolbarItem(_ id: String) -> some View {
+        self.id(id)
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: ToolbarItemFramesKey.self,
+                        value: [id: geometry.frame(in: .named("editorToolbar"))]
+                    )
+                }
+            }
+    }
+}
+
 struct CaptureEditorView: View {
     @ObservedObject var editor: CaptureEditorModel
     @State private var zoomScale: CGFloat = 1
     @State private var showsTextRecognition = false
+    @State private var toolbarItemFrames: [String: CGRect] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,26 +48,79 @@ struct CaptureEditorView: View {
     }
 
     private var editorToolbar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(ScreenshotEditingTool.allCases, id: \.rawValue) { tool in
-                    Button {
-                        editor.selectedTool = tool
-                    } label: {
-                        Image(systemName: icon(for: tool))
-                            .frame(width: 20, height: 20)
+        GeometryReader { geometry in
+            let viewportWidth = max(1, geometry.size.width - 64)
+
+            ScrollViewReader { proxy in
+                HStack(spacing: 0) {
+                    toolbarScrollButton(forward: false, viewportWidth: viewportWidth, proxy: proxy)
+
+                    ScrollView(.horizontal) {
+                        toolbarContents
                     }
-                    .buttonStyle(.bordered)
-                    .tint(editor.selectedTool == tool ? .accentColor : .secondary)
-                    .help(label(for: tool))
-                    .accessibilityLabel(label(for: tool))
-                    .accessibilityAddTraits(editor.selectedTool == tool ? .isSelected : [])
+                    .scrollIndicators(.visible)
+                    .coordinateSpace(name: "editorToolbar")
+                    .frame(width: viewportWidth)
+                    .onPreferenceChange(ToolbarItemFramesKey.self) { toolbarItemFrames = $0 }
+
+                    toolbarScrollButton(forward: true, viewportWidth: viewportWidth, proxy: proxy)
                 }
+            }
+        }
+        .frame(height: 56)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
 
-                Divider()
-                    .frame(height: 22)
-                    .padding(.horizontal, 3)
+    private func toolbarScrollButton(
+        forward: Bool,
+        viewportWidth: CGFloat,
+        proxy: ScrollViewProxy
+    ) -> some View {
+        let hiddenItems = toolbarItemFrames.filter {
+            forward ? $0.value.maxX > viewportWidth + 1 : $0.value.minX < -1
+        }
+        let target = hiddenItems.sorted {
+            forward ? $0.value.minX < $1.value.minX : $0.value.maxX > $1.value.maxX
+        }.first?.key
 
+        return Button {
+            guard let target else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                proxy.scrollTo(target, anchor: forward ? .leading : .trailing)
+            }
+        } label: {
+            Image(systemName: forward ? "chevron.right" : "chevron.left")
+                .frame(width: 32, height: 56)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .disabled(target == nil)
+        .help(forward ? "Show more tools" : "Show previous tools")
+        .accessibilityLabel(forward ? "Show more tools" : "Show previous tools")
+    }
+
+    private var toolbarContents: some View {
+        HStack(spacing: 6) {
+            ForEach(ScreenshotEditingTool.allCases, id: \.rawValue) { tool in
+                Button {
+                    editor.selectedTool = tool
+                } label: {
+                    Image(systemName: icon(for: tool))
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.bordered)
+                .tint(editor.selectedTool == tool ? .accentColor : .secondary)
+                .help(label(for: tool))
+                .accessibilityLabel(label(for: tool))
+                .accessibilityAddTraits(editor.selectedTool == tool ? .isSelected : [])
+                .toolbarItem(tool.rawValue)
+            }
+
+            Divider()
+                .frame(height: 22)
+                .padding(.horizontal, 3)
+
+            HStack(spacing: 6) {
                 ForEach(colorChoices, id: \.name) { choice in
                     Button {
                         editor.selectedColor = choice.value
@@ -74,18 +150,22 @@ struct CaptureEditorView: View {
                     .frame(width: 86)
                     .help("Line width")
                     .accessibilityLabel("Line width")
+            }
+            .toolbarItem("appearance")
 
-                if editor.selectedTool == .text {
-                    TextField("Text", text: $editor.textDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 128)
-                        .accessibilityLabel("Annotation text")
-                }
+            if editor.selectedTool == .text {
+                TextField("Text", text: $editor.textDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 128)
+                    .accessibilityLabel("Annotation text")
+                    .toolbarItem("text-entry")
+            }
 
-                Divider()
-                    .frame(height: 22)
-                    .padding(.horizontal, 3)
+            Divider()
+                .frame(height: 22)
+                .padding(.horizontal, 3)
 
+            HStack(spacing: 6) {
                 Button(action: editor.undo) {
                     Image(systemName: "arrow.uturn.backward")
                         .frame(width: 18, height: 18)
@@ -144,11 +224,14 @@ struct CaptureEditorView: View {
                 .buttonStyle(.borderless)
                 .disabled(!editor.hasEdits)
                 .help("Reset all edits")
+            }
+            .toolbarItem("edit-actions")
 
-                Divider()
-                    .frame(height: 22)
-                    .padding(.horizontal, 3)
+            Divider()
+                .frame(height: 22)
+                .padding(.horizontal, 3)
 
+            HStack(spacing: 6) {
                 Button {
                     zoomScale = max(1, zoomScale - 0.5)
                 } label: {
@@ -174,11 +257,13 @@ struct CaptureEditorView: View {
                 .disabled(zoomScale >= 4)
                 .help("Zoom in")
             }
-            .controlSize(.small)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .toolbarItem("zoom")
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .fixedSize()
+        .controlSize(.small)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
     }
 
     private var editorCanvas: some View {
