@@ -5,6 +5,7 @@ import SwiftUI
 struct MainView: View {
     @ObservedObject var model: AppModel
     @Environment(\.openWindow) private var openWindow
+    @State private var capturePendingClose: CaptureEditorModel?
 
     var body: some View {
         HSplitView {
@@ -270,6 +271,36 @@ struct MainView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .help("Save with options")
+                        Button {
+                            if let editor = model.captureEditor, editor.hasEdits {
+                                capturePendingClose = editor
+                            } else {
+                                model.closeLatestCapture()
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(model.isBusy)
+                        .help("Close screenshot")
+                        .accessibilityLabel("Close screenshot")
+                        .confirmationDialog(
+                            "Close screenshot?",
+                            isPresented: Binding(
+                                get: { capturePendingClose != nil },
+                                set: { if !$0 { capturePendingClose = nil } }
+                            ),
+                            titleVisibility: .visible,
+                            presenting: capturePendingClose
+                        ) { editor in
+                            Button("Close Screenshot", role: .destructive) {
+                                guard model.captureEditor === editor else { return }
+                                model.closeLatestCapture()
+                            }
+                        } message: { _ in
+                            Text("Edits in this preview will be discarded. Saved files and history will be kept.")
+                        }
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 14)
