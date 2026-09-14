@@ -8,7 +8,7 @@ SmartShot 将智能选区、区域截图、长截图、图片编辑、本地 OCR
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-macOS 14+ · Swift 6 · 开发版本 0.2.2
+macOS 14+ · Swift 6 · 预览版本 0.2.2
 
 ## 功能
 
@@ -23,9 +23,20 @@ macOS 14+ · Swift 6 · 开发版本 0.2.2
 | 录屏 | 将区域或当前显示器录制为 MP4，可选系统声音、麦克风及鼠标指针。支持 15/30/60 fps、1920/2560/3840 像素长边上限，以及预览、另存为和 GIF 导出。 |
 | 自动化 | 通过 URL Scheme 或应用内置的命令行工具触发截图、快速保存和显示主窗口。 |
 
+## 下载
+
+[SmartShot 0.2.2 预览版](https://github.com/infinityf4p/SmartShot/releases/tag/v0.2.2) 提供同时包含 Apple Silicon 和 Intel 架构的通用应用。
+
+- [macOS DMG](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SmartShot-0.2.2-universal.dmg)
+- [macOS ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SmartShot-0.2.2-universal.zip)
+- [浏览器扩展 ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SmartShot-Web-Selector-0.2.2.zip)
+- [SHA-256 校验文件](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SHA256SUMS.txt)
+
+该预览版使用 ad-hoc 签名，没有 Developer ID 证书或 Apple 公证。macOS 可能会阻止下载的应用，需要你在 Finder 或“隐私与安全性”中明确允许打开。安装包不含 `get-task-allow` 调试权限；Safari 开发启用条件及下方待验收范围仍然适用。
+
 ## 开始使用
 
-1. 按下方说明构建并启动 SmartShot。
+1. 下载 DMG 或 ZIP，将 `SmartShot.app` 放入 `/Applications` 后启动；也可以按下方说明从源码构建。
 2. 截图与录屏需要 **屏幕录制** 权限。**辅助功能** 权限用于智能内容块选择；没有该权限时仍可手动框选。麦克风权限独立且可选。
 3. 点击 **Capture**，或使用应用中显示的快捷键。选择 **Smart**、**Region**、**Long** 或 **App Scroll**，按 Escape 取消。
 4. 编辑截图后选择 Copy、Pin、Save 或 Quick Save。录屏入口为 **More > Record Region** 或 **Record Current Display**；Stop 保存 MP4，Cancel 丢弃本次录制。
@@ -49,7 +60,7 @@ xcodebuild -project SmartShot.xcodeproj -scheme SmartShot \
 open DerivedData/Build/Products/Release/SmartShot.app
 ```
 
-上述命令用 ad-hoc 签名覆盖项目中的本地签名身份，**不需要 Keychain 签名证书**。生成的是本地开发应用，并非经过 Developer ID 签名或公证的发行版；签名变化后，macOS 可能要求重新授权。目前没有打包的 GitHub Release。
+上述命令用 ad-hoc 签名覆盖项目中的本地签名身份，**不需要 Keychain 签名证书**。生成的本地应用与预览版下载具有相同的签名限制，并非经过 Developer ID 签名或公证的发行版；签名变化后，macOS 可能要求重新授权。
 
 Safari 扩展开发请改用独立构建脚本：
 
@@ -66,7 +77,7 @@ Scripts/build_safari_development.sh
 **Chrome / Chromium / Edge / Brave**
 
 1. 将完整的普通应用包安装到 `/Applications/SmartShot.app`，在 **Settings > Chromium Integration > Install** 中配置原生通信助手。
-2. 打开浏览器的扩展管理页，启用开发者模式，选择 **加载已解压的扩展程序 / Load unpacked**，加载本仓库的 `BrowserExtension` 目录。源码更新后需要重新加载扩展；应用内的 **Reveal Extension** 可以定位已安装应用所附带的扩展副本。
+2. 打开浏览器的扩展管理页，启用开发者模式，选择 **加载已解压的扩展程序 / Load unpacked**，加载解压后的浏览器扩展 ZIP 目录，或本仓库的 `BrowserExtension` 目录。更新后需要重新加载扩展；应用内的 **Reveal Extension** 可以定位已安装应用所附带的扩展副本。
 3. 打开允许访问的网页，通过工具栏或 macOS 上的 `Control-Shift-9` 调用 **SmartShot Web Selector**，选择内容块后点击或按 Return 确认。
 
 **Safari**
