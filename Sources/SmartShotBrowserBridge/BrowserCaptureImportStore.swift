@@ -1,3 +1,4 @@
+import CoreFoundation
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -702,31 +703,18 @@ final class BrowserCaptureImportStore {
     }
 
     private static func integer(_ value: Any?) -> Int? {
-        if value is Bool { return nil }
-        if let value = value as? Int { return value }
-        if let value = value as? NSNumber {
-            let number = value.doubleValue
-            guard number.isFinite,
-                  number.rounded(.towardZero) == number,
-                  number >= Double(Int.min),
-                  number <= Double(Int.max) else { return nil }
-            return Int(number)
-        }
-        return nil
+        // JSON NSNumber values 0 and 1 also bridge to Bool; check their actual CF type.
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        if let integer = value as? Int { return integer }
+        return Int(exactly: number.doubleValue)
     }
 
     private static func double(_ value: Any?) -> Double? {
-        if value is Bool { return nil }
-        let number: Double?
-        if let value = value as? Double {
-            number = value
-        } else if let value = value as? NSNumber {
-            number = value.doubleValue
-        } else {
-            number = nil
-        }
-        guard let number, number.isFinite else { return nil }
-        return number
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
+              number.doubleValue.isFinite else { return nil }
+        return number.doubleValue
     }
 
     private static func sanitizedLabel(_ value: String?, fallback: String) -> String {

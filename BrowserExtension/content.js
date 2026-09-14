@@ -1,14 +1,17 @@
 (function installSmartShotSelector() {
   "use strict";
 
-  if (globalThis.__blockShotSelectorInstalled) return;
-  globalThis.__blockShotSelectorInstalled = true;
-
   const extensionApi = globalThis.browser || globalThis.chrome;
   const Core = globalThis.SmartShotCore;
+  const SELECTOR_PROTOCOL_VERSION = Core.SELECTOR_PROTOCOL_VERSION;
   const Selection = globalThis.SmartShotSelection;
   const CaptureGuards = globalThis.SmartShotCaptureGuards;
   const Delivery = globalThis.SmartShotDelivery;
+  const previousController = globalThis.__smartShotSelectorController;
+  if (previousController && typeof previousController.dispose === "function") {
+    previousController.dispose();
+  }
+  globalThis.__blockShotSelectorInstalled = true;
   const state = {
     active: false,
     host: null,
@@ -44,8 +47,7 @@
     return Core.kindFromDescriptor(Selection.descriptor(element));
   }
 
-  function candidateChainAt(x, y) {
-    let leaf = document.elementFromPoint(x, y);
+  function candidateChainFromLeaf(leaf) {
     if (!leaf || leaf === state.host) return [];
     return Selection.candidateChainFromLeaf(leaf, {
       documentElement: document.documentElement,
@@ -54,12 +56,35 @@
     });
   }
 
+  function candidateChainAt(x, y) {
+    return candidateChainFromLeaf(document.elementFromPoint(x, y));
+  }
+
   function metadataFor(_element, kind) {
     return kind === "x-post" ? { platform: "x" } : {};
   }
 
   function currentElement() {
     return state.chain[state.level] || null;
+  }
+
+  function preferredLevel(chain) {
+    const semanticLevel = chain.findIndex((element) => Selection.isSemantic(element));
+    return semanticLevel >= 0 ? semanticLevel : 0;
+  }
+
+  function initialCandidateChain() {
+    const focused = document.activeElement;
+    const focusIsUsable = focused &&
+      focused !== document.body &&
+      focused !== document.documentElement &&
+      focused !== state.host &&
+      !(state.host && state.host.contains(focused));
+    if (focusIsUsable) {
+      const focusedChain = candidateChainFromLeaf(focused);
+      if (focusedChain.length) return focusedChain;
+    }
+    return candidateChainAt(innerWidth / 2, innerHeight / 2);
   }
 
   function candidateFor(element) {
@@ -105,7 +130,7 @@
     const selected = currentElement();
     const preservedIndex = selected ? nextChain.indexOf(selected) : -1;
     state.chain = nextChain;
-    state.level = preservedIndex >= 0 ? preservedIndex : 0;
+    state.level = preservedIndex >= 0 ? preservedIndex : preferredLevel(nextChain);
     render();
   }
 
@@ -134,11 +159,13 @@
     if (!state.active) return;
     if (event.key === "Escape") {
       event.preventDefault();
+      event.stopImmediatePropagation();
       stop();
       return;
     }
     if (event.key === "Enter") {
       event.preventDefault();
+      event.stopImmediatePropagation();
       captureSelection();
       return;
     }
@@ -174,7 +201,12 @@
   }
 
   function onClick(event) {
-    if (!state.active || !currentElement()) return;
+    if (!state.active) return;
+    if (!currentElement()) {
+      state.chain = candidateChainFromLeaf(event.target);
+      state.level = preferredLevel(state.chain);
+    }
+    if (!currentElement()) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     captureSelection();
@@ -221,6 +253,9 @@
       priority: document.documentElement.style.getPropertyPriority("cursor")
     };
     document.documentElement.style.setProperty("cursor", "crosshair", "important");
+    state.chain = initialCandidateChain();
+    state.level = preferredLevel(state.chain);
+    render();
   }
 
   function stop() {
@@ -401,8 +436,11 @@
     return canvas.toDataURL("image/png");
   }
 
-  function assertEnvelopeResponse(response, type) {
+  function assertEnvelopeResponse(response, request, type) {
     if (!Core.isEnvelope(response)) throw new Error("SmartShot returned an invalid response.");
+    if (response.requestId !== request.requestId) {
+      throw new Error("SmartShot returned a response for another capture request.");
+    }
     if (response.type === "error") throw new Error(response.payload.message || "Capture failed.");
     if (response.type !== type) throw new Error("SmartShot returned an unexpected capture response.");
     return response;
@@ -466,7 +504,10 @@
         }
       }, requestId);
       const ready = await sendBeforeDeadline(begin, deadline);
-      assertEnvelopeResponse(ready, "capture.long.ready");
+      assertEnvelopeResponse(ready, begin, "capture.long.ready");
+      if (ready.payload.accepted !== true) {
+        throw new Error("The browser did not accept the long capture session.");
+      }
       sessionStarted = true;
       cancellation.throwIfCancelled();
 
@@ -486,6 +527,7 @@
         const request = Core.makeEnvelope("capture.slice.request", { index: slice.index }, requestId);
         const response = assertEnvelopeResponse(
           await sendBeforeDeadline(request, deadline),
+          request,
           "capture.slice.response"
         );
         cancellation.throwIfCancelled();
@@ -564,7 +606,14 @@
       }
 
       const end = Core.makeEnvelope("capture.long.end", { cancelled: false }, requestId);
-      assertEnvelopeResponse(await sendBeforeDeadline(end, deadline), "capture.long.ended");
+      const ended = assertEnvelopeResponse(
+        await sendBeforeDeadline(end, deadline),
+        end,
+        "capture.long.ended"
+      );
+      if (ended.payload.completed !== true) {
+        throw new Error("The browser did not complete the long capture session.");
+      }
       completed = true;
       cancellation.throwIfCancelled();
 
@@ -671,11 +720,13 @@
       }
 
       const request = Core.makeEnvelope("capture.request", { candidate: refreshedCandidate });
-      const response = await sendMessage(request);
+      const response = assertEnvelopeResponse(
+        await sendMessage(request),
+        request,
+        "capture.response"
+      );
       cancellation.throwIfCancelled();
-      if (!Core.isEnvelope(response)) throw new Error("SmartShot returned an invalid response.");
-      if (response.type === "error") throw new Error(response.payload.message || "Capture failed.");
-      if (response.type !== "capture.response" || typeof response.payload.imageDataUrl !== "string") {
+      if (response.payload.accepted !== true || typeof response.payload.imageDataUrl !== "string") {
         throw new Error("No browser capture was returned.");
       }
 
@@ -694,24 +745,75 @@
     }
   }
 
-  extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!Core.isEnvelope(message)) return false;
-    if (message.type === "selection.toggle") {
+  function selectorCommandForMessage(message) {
+    if (Core.isEnvelope(message, "selection.command") &&
+        [SELECTOR_PROTOCOL_VERSION, SELECTOR_PROTOCOL_VERSION - 1]
+          .includes(message.payload.selectorProtocolVersion)) {
+      return {
+        action: message.payload.action,
+        responseProtocolVersion: message.payload.selectorProtocolVersion
+      };
+    }
+    if (Core.isEnvelope(message, "selection.toggle")) {
+      return { action: "toggle", responseProtocolVersion: SELECTOR_PROTOCOL_VERSION };
+    }
+    if (Core.isEnvelope(message, "selection.start")) {
+      return { action: "start", responseProtocolVersion: SELECTOR_PROTOCOL_VERSION };
+    }
+    if (Core.isEnvelope(message, "selection.stop")) {
+      return { action: "stop", responseProtocolVersion: SELECTOR_PROTOCOL_VERSION };
+    }
+    return null;
+  }
+
+  function onRuntimeMessage(message, _sender, sendResponse) {
+    const command = selectorCommandForMessage(message);
+    if (!command) return false;
+    const { action } = command;
+
+    if (action === "toggle") {
       if (state.capturing) cancelCapture();
       else state.active ? stop() : start();
     }
-    else if (message.type === "selection.start") start();
-    else if (message.type === "selection.stop") {
+    else if (action === "start") {
+      if (state.capturing) cancelCapture();
+      else start();
+    }
+    else if (action === "stop") {
       if (state.capturing) cancelCapture();
       stop();
     }
-    else return false;
+    else if (action !== "status") return false;
 
     if (typeof sendResponse === "function") {
-      sendResponse(Core.makeEnvelope("selection.state", { active: state.active }, message.requestId));
+      sendResponse(Core.makeEnvelope("selection.state", {
+        active: state.active,
+        capturing: state.capturing,
+        selectorProtocolVersion: command.responseProtocolVersion
+      }, message.requestId));
     }
     return false;
+  }
+
+  function dispose() {
+    cancelCapture("SmartShot selector was updated.");
+    stop();
+    if (typeof extensionApi.runtime.onMessage.removeListener === "function") {
+      extensionApi.runtime.onMessage.removeListener(onRuntimeMessage);
+    }
+    window.removeEventListener("pagehide", onPageLifecycleExit, true);
+    document.removeEventListener("visibilitychange", onVisibilityChange, true);
+    if (globalThis.__smartShotSelectorController === controller) {
+      delete globalThis.__smartShotSelectorController;
+    }
+  }
+
+  const controller = Object.freeze({
+    selectorProtocolVersion: SELECTOR_PROTOCOL_VERSION,
+    dispose
   });
+  globalThis.__smartShotSelectorController = controller;
+  extensionApi.runtime.onMessage.addListener(onRuntimeMessage);
 
   window.addEventListener("pagehide", onPageLifecycleExit, true);
   document.addEventListener("visibilitychange", onVisibilityChange, true);

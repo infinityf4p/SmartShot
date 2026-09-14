@@ -29,9 +29,9 @@ enum SafariExtensionIntegrationStatus: Equatable, Sendable {
         case .enabled:
             "Safari extension is enabled."
         case .disabled:
-            "Safari extension is installed but disabled."
+            "Safari extension is off. Enable SmartShot Web Selector in Safari Settings. Local development requires Apple signing or Sign to Run Locally."
         case .preferencesOpened:
-            "Safari Extensions settings opened. Enable SmartShot there, then click Refresh."
+            "Safari Extensions settings opened. Enable SmartShot Web Selector, then click Refresh. If it is not listed, use Apple signing or Sign to Run Locally."
         case let .unavailable(message):
             message
         }

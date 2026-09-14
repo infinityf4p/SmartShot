@@ -51,8 +51,12 @@ final class SafariExtensionServiceTests: XCTestCase {
         XCTAssertTrue(SafariExtensionIntegrationStatus.enabled.isEnabled)
         XCTAssertFalse(SafariExtensionIntegrationStatus.disabled.hasError)
         XCTAssertEqual(
+            SafariExtensionIntegrationStatus.disabled.message,
+            "Safari extension is off. Enable SmartShot Web Selector in Safari Settings. Local development requires Apple signing or Sign to Run Locally."
+        )
+        XCTAssertEqual(
             SafariExtensionIntegrationStatus.preferencesOpened.message,
-            "Safari Extensions settings opened. Enable SmartShot there, then click Refresh."
+            "Safari Extensions settings opened. Enable SmartShot Web Selector, then click Refresh. If it is not listed, use Apple signing or Sign to Run Locally."
         )
     }
 

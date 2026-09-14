@@ -2,7 +2,13 @@
 
 ## Snapshot
 
-This document reflects the checkout on 2026-08-24. Keep these evidence classes separate:
+The capability table below records the 2026-08-24 snapshot. The full automated gates were rerun on **2026-09-14**: **205/205 native** and **114/114 browser** tests passed with no failures or skips; see the [test plan](TEST_PLAN.md). The README's ad-hoc Release build and strict nested signature checks also passed without a Keychain signing certificate. No application was installed or launched for this publication check.
+
+The [2026-09-06 acceptance record](ACCEPTANCE_2026-09-06.md) adds PNG/JPEG Quick Save, Number/Text, Undo/Redo, Flatten replacement, and video-only recording/playback. The resumed run verifies editor refresh, drag-based cropping, history reopen, rectangle move/delete, 59.3-second system-audio recording with 59 detected test tones, a 30.00-second GUI GIF export, recording cancellation, and Region output scaling. Actual microphone recording, A/V sync, controlled native capture boundaries, clipboard pixels, and Safari capture remain pending.
+
+The [2026-09-05 acceptance record](ACCEPTANCE_2026-09-05.md) contains the native JSON/browser quota fixes, controlled Chrome visible/long native previews, dynamic/nested rejection, and OCR/redaction/private-history/search/Pin checks. The Chrome reload and long-capture retest are complete. The installed 0.2.1 app has not been replaced; temporary packages use Sign to Run Locally without a Keychain identity.
+
+Keep these evidence classes separate:
 
 - **Implemented**: code and a user-facing entry point exist.
 - **Automated coverage**: checked-in deterministic tests cover the named logic.
@@ -43,7 +49,7 @@ cd BrowserExtension
 npm test
 ```
 
-For real permission, URL-scheme, Safari, and Chromium checks, build with the configured local signing identity or intentionally configured development-team signing, then install the complete bundle as `/Applications/SmartShot.app`. The post-build phase embeds:
+For real native permission, URL-scheme, CLI, and Chromium checks, build with the configured local signing identity or intentionally configured development-team signing, then install the complete bundle as `/Applications/SmartShot.app`. Safari development is a separate signing case described below. The post-build phase embeds:
 
 - `Contents/Helpers/SmartShotNativeHost`
 - `Contents/Helpers/smartshot`
@@ -67,7 +73,7 @@ Both browsers first validate and stage a completed browser-produced PNG through 
 
 Chromium holds the staged image in the bounded Application Support store. Safari moves it through request-scoped named pasteboards because the sandboxed extension and containing app do not share that private directory. Normal paths validate and clean up the boards, but the channel has no cryptographic source authentication against another process running as the same macOS user, and an extension crash after publication can leave bounded request residue. Treat both as accepted P2 boundaries of this local self-signed release.
 
-For the local self-signed development build, Safari must have **Settings > Developer > Allow unsigned extensions** enabled before the extension can appear and be enabled. Safari resets that development setting whenever it quits. Do not require this override for a future Apple-signed distribution build.
+The persistent `/Applications` artifact has a custom local self-signed identity. That identity is sufficient for native testing but Safari does not accept its embedded WebExtension merely because **Allow unsigned extensions** is enabled. Use Apple development signing, or build the complete container and extension with Xcode's **Sign to Run Locally**, launch that exact build, then enable **Settings > Developer > Allow unsigned extensions** and the extension. Safari resets the override whenever it quits. Rebuild to a fresh path/version instead of replacing registered resources in place. Do not require this development path for a future Apple-signed distribution build.
 
 Do not describe the browser path as DOM-to-AppKit coordinate mapping. The current design captures/crops/stitches in the browser and imports the completed PNG.
 
@@ -110,10 +116,11 @@ None promises dynamic/infinite feeds, virtualized lists, nested scrolling, cross
 
 ## Recorded Evidence
 
-- The Swift/XCTest gate passed **199/199** on 2026-08-24.
-- The BrowserExtension Node gate passed **67/67** on 2026-08-24.
-- A fresh universal Release app on 2026-08-24 passed strict deep signature verification, was installed byte-identically at `/Applications/SmartShot.app`, launched, and survived repeated Safari status refreshes without a new crash.
-- Exactly 32 stale temporary Safari-extension registrations were removed on 2026-08-24, leaving one registration for `/Applications/SmartShot.app/Contents/PlugIns/SmartShot Safari Extension.appex`. SmartShot status then changed from an extension-manager error to **installed but disabled**. This records environment repair and status recovery, not extension enablement or capture success.
+- The native Swift test gate passed **199/199** on 2026-08-24.
+- The BrowserExtension Node gate passed **93/93** on 2026-08-24.
+- A fresh universal **0.2.1 (build 7)** Release app on 2026-08-24 passed strict deep signature verification, was installed at `/Applications/SmartShot.app`, and launched from that exact path. The browser manifest version is **0.2.1**.
+- Stale temporary Safari-extension registrations were removed again after build 7, leaving exactly one registration for the fresh `Sign to Run Locally` Clean7 development artifact. This records environment repair and registration state, not extension enablement or capture success.
+- An earlier `Sign to Run Locally` SmartShot Web Selector 0.2.1 development build was listed and enabled in Safari 26.5.2 and had its toolbar item added. A later physical toolbar attempt did not establish selector activation. Clean7 is currently registered, but selector injection, Website Access recovery, capture, native preview, and fallback remain unverified.
 - The post-capture editor basic subset was exercised from a signed Debug fixture on 2026-08-19: tool switching, text/counter placement, undo/redo, 150% zoom, and Pin.
 - Controlled automatic AX scrolling on 2026-08-15 produced a 2,688 x 8,724 PNG containing rows 001 through 240 and restored the exact original scrollbar value; a forced timeout restored the same value.
 - The BrowserExtension Node suite covers X/generic DOM fixtures, restoration guards, bounded geometry, strict import ACKs, and fallback behavior.
@@ -133,7 +140,7 @@ Do not turn checked-in coverage into a passing-current-suite claim unless the fi
 - Frontmost-app shortcut delivery, full-screen Spaces, mixed displays/scales, negative origins, and overlay teardown.
 - Complete editor/OCR/history search/retention/restart GUI workflow beyond the recorded subset and Private history check.
 - Public controlled Chrome, Safari, and X fast/long capture with native preview and fallback evidence, including the `downloads` permission prompt, page teardown, Safari API degradation, toolbar diagnostics, and dynamic-media false-positive/false-negative checks.
-- Explicitly load the unpacked extension in Chromium and enable the Safari extension after the local unsigned-extension development override; neither protected browser action is counted as complete until observed.
+- Explicitly load/reload the unpacked extension in Chromium. Safari development enablement is recorded, but a physical action invocation, Website Access denial/recovery, controlled capture, and native import remain pending.
 - Safari named-pasteboard cleanup after forced timeout/crash and same-user interference behavior, without treating the current P2 boundary as authenticated IPC.
 - Remaining URL/CLI collision, failure, active-operation, and full-screen-hotkey cases.
 - Recording still needs current-display, system audio, microphone, A/V sync, Cancel, display changes, sustained duration, and failure-cleanup checks.

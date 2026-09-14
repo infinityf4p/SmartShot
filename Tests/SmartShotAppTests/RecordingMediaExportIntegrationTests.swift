@@ -40,6 +40,52 @@ final class RecordingMediaExportIntegrationTests: XCTestCase {
         XCTAssertLessThanOrEqual(CGImageSourceGetCount(source), 4)
     }
 
+    func testEncodedGIFPreservesDurationAtFractionalFrameDelays() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SmartShotGIFTimingTests", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let videoURL = root.appendingPathComponent("source.mov")
+        try await makeTestVideo(at: videoURL)
+        let sourceDuration = try await AVURLAsset(url: videoURL).load(.duration)
+        for (frameRate, maximumDuration) in [(15, 1.0), (15, 0.73), (10, 0.71)] {
+            let gifURL = root.appendingPathComponent("\(frameRate)-\(maximumDuration).gif")
+            _ = try await GIFExportService.export(
+                videoURL: videoURL,
+                destinationURL: gifURL,
+                options: GIFExportOptions(
+                    maximumDuration: maximumDuration,
+                    frameRate: frameRate,
+                    maximumLongEdge: 64
+                )
+            )
+            let source = try XCTUnwrap(CGImageSourceCreateWithURL(gifURL as CFURL, nil))
+            var encodedDuration: TimeInterval = 0
+            for index in 0..<CGImageSourceGetCount(source) {
+                XCTAssertNotNil(CGImageSourceCreateImageAtIndex(source, index, nil))
+                let properties = try XCTUnwrap(
+                    CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
+                )
+                let gifProperties = try XCTUnwrap(
+                    properties[kCGImagePropertyGIFDictionary] as? [CFString: Any]
+                )
+                let delay = try XCTUnwrap(
+                    gifProperties[kCGImagePropertyGIFUnclampedDelayTime] as? NSNumber
+                ).doubleValue
+                XCTAssertGreaterThanOrEqual(delay, 0.02)
+                encodedDuration += delay
+            }
+            XCTAssertEqual(
+                encodedDuration,
+                min(CMTimeGetSeconds(sourceDuration), maximumDuration),
+                accuracy: 0.005,
+                "GIF timing drifted at \(frameRate) fps with a \(maximumDuration)-second limit."
+            )
+        }
+    }
+
     private func makeTestVideo(at url: URL) async throws {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         let input = AVAssetWriterInput(

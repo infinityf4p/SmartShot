@@ -33,10 +33,21 @@ Also run `git diff --check` and validate local Markdown links before handoff. Co
 
 ## Current Checkout Automated Record
 
-Recorded on 2026-08-24 for the checkout described by these documents:
+Automated gates rerun on 2026-09-14 before publishing the native JSON, browser quota, editor-refresh, and GIF-timing changes. Runtime observations below remain dated September 5-6:
 
-- `xcodebuild ... test CODE_SIGNING_ALLOWED=NO`: **199/199 passed**.
-- `BrowserExtension/npm test`: **67/67 passed**.
+- Native: **205/205 passed, 0 failed, 0 skipped** on September 14, confirmed with `xcresulttool get test-results summary`.
+- Browser extension: **114/114 passed, 0 failed, 0 skipped** on September 14.
+- The README's ad-hoc Release build and strict nested signature verification passed on September 14 without a Keychain signing certificate. The earlier isolated universal Safari development package also passed its signature/entitlement checks in the September 5-6 run.
+- Result bundle and logs for the September 14 gates were generated under `/private/tmp/SmartShot-publication-20260914.W8e2Oq`, outside the repository. No new GUI acceptance or installed-app replacement is claimed from these checks.
+- [September 6 runtime record](ACCEPTANCE_2026-09-06.md) adds Number/Text, Undo/Redo, PNG/JPEG Quick Save, Flatten replacement, and video-only recording/playback. The resumed run verifies editor refresh, restart/reopen, rectangle move/delete, a 1112 x 796 drag-cropped PNG, 59.3-second system-audio recording with 59 detected test tones, a 30.00-second GUI GIF export, recording cancellation, and Region output scaling. Actual microphone recording, A/V sync, controlled native capture boundaries, clipboard pixels, and Safari capture remain pending.
+- [September 5 runtime record](ACCEPTANCE_2026-09-05.md) contains Chrome visible/long native previews, dynamic/nested rejection, OCR/private-mode/history-search/Pin results, and the preceding fixes. The user-reloaded Chrome extension produced a complete 1240 x 5232 long PNG with all 48 expected rows; automation pointer marks remain visible.
+
+## Previous Automated Record
+
+Recorded on 2026-08-24:
+
+- `xcodebuild ... test CODE_SIGNING_ALLOWED=NO`: **199/199 passed, 0 skipped**.
+- `BrowserExtension/npm test`: **93/93 passed**.
 - Browser JavaScript syntax checks, manifest JSON parsing, Markdown relative-link validation, and `git diff --check` passed.
 
 These results prove current automated gates only, not signed GUI behavior.
@@ -98,8 +109,9 @@ The dependency-free Node suite covers:
 - Fail-closed nested-scroll and fixed/sticky-root behavior.
 - Navigation, tab/document, mutation, resize, manual-scroll, timeout, and dynamic-content guards, including long-slice verification-frame dimensions, bounded noise, localized motion, and broad low-amplitude changes.
 - Restoration of page scroll and temporary page/style changes after success and failure.
-- Strict native-import order, chunking, UUID and ACK validation, rejection/timeout/interruption behavior, background downloads that outlive content-page teardown, content fallback without duplicates, and fixed toolbar diagnostics.
+- Strict visible/long-capture response request correlation, accepted/completed stage checks, native-import order, chunking, UUID and ACK validation, rejection/timeout/interruption behavior, background downloads that outlive content-page teardown, content fallback without duplicates, and fixed toolbar diagnostics.
 - URL minimization, safe filenames/kinds/origins, and absence of page content at the native boundary.
+- Browser-action shortcut declaration, side-effect-free selector status/capture probing, v2 and 0.2.0 cached-background compatibility, state-preserving upgrade/reinjection, per-tab action serialization with cross-tab independence, failure recovery, and selection establishment for accessibility/automation clicks that arrive without prior pointer movement.
 
 Fixtures intentionally keep one X post in scope. They are not a current-X browser compatibility result and do not implement thread capture.
 
@@ -109,7 +121,7 @@ Recording tests cover AppKit-to-display-local region mapping, source planning/re
 
 ## Recorded Narrow GUI Evidence
 
-The following observations may be cited only with their stated scope:
+The following August observations may be cited only with their stated scope. The September records linked above contain later results.
 
 - On 2026-08-15, a controlled static native `NSScrollView` Automatic App Scroll run produced a 2,688 x 8,724 PNG containing fixture rows 001 through 240 and restored the exact original AX scrollbar value. A forced-timeout run restored the same value.
 - On 2026-08-19, a signed Debug editor fixture exercised tool switching, text/counter placement, undo/redo, 150% zoom, and Pin. This did not cover every current tool, OCR, history, private mode, or output format.
@@ -118,12 +130,13 @@ The following observations may be cited only with their stated scope:
 - On 2026-08-23, Pin created an always-on-top layer-3 panel; Quick Save wrote a 1,992 x 1,285 PNG; and a Private Region capture left the existing six-item history unchanged. Arrow/Undo/Redo and a controlled OCR recognition path also ran, but the complete editor/OCR/history matrix remains pending.
 - On 2026-08-23, the installed CLI exercised help, invalid input, activating Show, non-activating Smart/App Scroll delivery to TextEdit, and Quick Save writing an 880 x 520 PNG.
 - On 2026-08-23, a live region recording with system audio, microphone, and pointer disabled produced a 22.18-second 994 x 622 H.264 MP4. Preview remained in the same SmartShot process, Save As succeeded, and GIF export produced a 994 x 622 333-frame GIF.
-- On 2026-08-24, a fresh universal self-signed Release build passed strict deep signature verification, matched the staged app byte-for-byte after installation at `/Applications/SmartShot.app`, launched successfully, and remained alive through repeated Safari-extension status refreshes. This does not prove extension enablement or capture.
-- On 2026-08-24, 32 stale temporary Safari-extension registrations were removed, leaving exactly the installed app's embedded extension registered. SmartShot then reported **installed but disabled** instead of the prior extension-manager error. This is environment/status evidence only.
+- On 2026-08-24, a fresh universal self-signed **0.2.1 (build 7)** Release build passed strict deep signature verification, was installed at `/Applications/SmartShot.app`, and launched from that exact path. This does not prove extension enablement or capture.
+- On 2026-08-24, stale temporary Safari-extension registrations were cleaned again after build 7, leaving exactly one fresh `Sign to Run Locally` Clean7 development registration. This is environment/registration evidence only.
+- On 2026-08-24, Safari 26.5.2 listed and enabled an earlier complete `Sign to Run Locally` SmartShot Web Selector 0.2.1 development build and accepted its toolbar item. A later physical toolbar attempt did not establish selector activation. Clean7 was registered at that snapshot, but selector injection, Website Access recovery, capture, native preview, and fallback remained unverified.
 
 No real signed Chrome/Safari + current X native-import result is recorded in this document. The installed-app startup, status, and registration-cleanup observations above do not change this.
 
-No live current-display, system-audio, or microphone recording is recorded in this document. The live evidence above is limited to one video-only region path; the offline media export test remains automated evidence.
+The August recording evidence above covers one video-only region path. The September 6 record adds live current-display and system-audio outputs; actual microphone recording and A/V sync remain pending. The offline media export test remains automated evidence.
 
 ## Native GUI Acceptance Matrix
 
@@ -232,7 +245,7 @@ Run the embedded `/Applications/SmartShot.app/Contents/Helpers/smartshot` with n
 - Record that the current artifact is self-signed and not notarized. On a newly downloaded/quarantined copy, verify the exact Gatekeeper prompt and explicit Finder **Open** or **Privacy & Security** approval path; do not disable Gatekeeper or call this Developer ID distribution.
 - In Chrome, Chromium, Edge, and Brave as available, install the host from Settings and use the browser's protected, user-controlled Developer mode / **Load unpacked** UI to load the revealed extension. Record the `downloads` permission warning and confirm SmartShot does not inspect download history.
 - Treat **Connected** only as manifest validation. Separately verify the extension is loaded, enabled, has site access, and completes native import.
-- In Safari, use SmartShot's status and settings entry to enable the embedded extension, grant/revoke Website Access, refresh status, and verify action/API failure diagnostics. For the current self-signed development artifact, first enable **Safari > Settings > Developer > Allow unsigned extensions**, record the authentication prompt, and verify that Safari resets the override after it quits. Do not include that override in the supported distribution contract.
+- In Safari, use SmartShot's status and settings entry to enable the embedded extension, grant/revoke Website Access, refresh status, and verify action/API failure diagnostics. Use Apple development signing or Xcode's **Sign to Run Locally** for the complete containing app and extension; a custom persistent self-signed identity is not sufficient. For the latter, first enable **Safari > Settings > Developer > Allow unsigned extensions**, record the authentication prompt, and verify that Safari resets the override after it quits. Do not include that override in the supported distribution contract.
 
 ### Controlled Browser Fixtures
 

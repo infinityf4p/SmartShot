@@ -45,7 +45,8 @@
   function isSemantic(element) {
     const tag = element.localName;
     const role = (element.getAttribute("role") || "").toLowerCase();
-    return tag === "article" || tag === "main" || tag === "section" || SEMANTIC_ROLES.has(role);
+    return tag === "article" || tag === "li" || tag === "main" || tag === "section" ||
+      SEMANTIC_ROLES.has(role);
   }
 
   function isLayoutBlock(element, getStyle) {
@@ -110,6 +111,7 @@
     candidateChainFromLeaf,
     descriptor,
     hasUsableRect,
+    isSemantic,
     isXPost,
     rectFor
   });

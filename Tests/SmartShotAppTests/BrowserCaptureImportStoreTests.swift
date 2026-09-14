@@ -4,6 +4,98 @@ import ImageIO
 import XCTest
 
 final class BrowserCaptureImportStoreTests: XCTestCase {
+    func testImportsJSONDecodedPNGWithZeroAndOneNumbers() throws {
+        let fixture = try makeFixture()
+        defer { fixture.cleanup() }
+        let pngData = try makePNG(width: 2, height: 2)
+        let encoded = pngData.base64EncodedString()
+
+        let begin = fixture.store.handle(try jsonRoundTrip(envelope(
+            type: "capture.import.begin",
+            requestID: fixture.requestID,
+            payload: beginPayload(
+                pngData: pngData,
+                encoded: encoded,
+                chunkCount: 1,
+                logicalWidth: 1,
+                logicalHeight: 1
+            )
+        )))
+        assertAccepted(begin, stage: "begin")
+        guard (begin.response["payload"] as? [String: Any])?["accepted"] as? Bool == true else {
+            return
+        }
+
+        let chunk = fixture.store.handle(try jsonRoundTrip(envelope(
+            type: "capture.import.chunk",
+            requestID: fixture.requestID,
+            payload: ["index": 0, "data": encoded]
+        )))
+        assertAccepted(chunk, stage: "chunk", index: 0)
+
+        let end = fixture.store.handle(try jsonRoundTrip(envelope(
+            type: "capture.import.end",
+            requestID: fixture.requestID,
+            payload: ["byteLength": pngData.count, "chunkCount": 1]
+        )))
+        assertAccepted(end, stage: "end")
+        let artifact = try fixture.store.consumeCompletedCapture(requestID: fixture.requestID)
+        XCTAssertEqual(artifact.pngData, pngData)
+        XCTAssertEqual(artifact.metadata.logicalWidth, 1)
+        XCTAssertEqual(artifact.metadata.logicalHeight, 1)
+    }
+
+    func testRejectsJSONDecodedBooleansInNumericFields() throws {
+        let fixture = try makeFixture()
+        defer { fixture.cleanup() }
+        let pngData = try makePNG(width: 2, height: 2)
+        let payload = beginPayload(
+            pngData: pngData,
+            encoded: pngData.base64EncodedString(),
+            chunkCount: 1
+        )
+        for value in [true, false] {
+            var message = envelope(
+                type: "capture.import.begin",
+                requestID: fixture.requestID,
+                payload: payload
+            )
+            message["version"] = value
+            assertRejected(fixture.store.handle(try jsonRoundTrip(message)), code: "invalid_envelope")
+
+            for field in ["byteLength", "base64Length", "chunkCount", "logicalWidth", "logicalHeight"] {
+                var invalidPayload = payload
+                invalidPayload[field] = value
+                assertRejected(fixture.store.handle(try jsonRoundTrip(envelope(
+                    type: "capture.import.begin",
+                    requestID: fixture.requestID,
+                    payload: invalidPayload
+                ))), code: "invalid_metadata")
+            }
+        }
+        XCTAssertFalse(partialSessionExists(fixture))
+    }
+
+    func testRejectsJSONDecodedFractionalAndOutOfRangeNumbers() throws {
+        let fixture = try makeFixture()
+        defer { fixture.cleanup() }
+        let pngData = try makePNG(width: 2, height: 2)
+        for value in [1.5, Double(Int.max), Double.greatestFiniteMagnitude] {
+            var payload = beginPayload(
+                pngData: pngData,
+                encoded: pngData.base64EncodedString(),
+                chunkCount: 1
+            )
+            payload["chunkCount"] = value
+            assertRejected(fixture.store.handle(try jsonRoundTrip(envelope(
+                type: "capture.import.begin",
+                requestID: fixture.requestID,
+                payload: payload
+            ))), code: "invalid_metadata")
+        }
+        XCTAssertFalse(partialSessionExists(fixture))
+    }
+
     func testImportsValidPNGAndConsumesInboxArtifact() throws {
         let fixture = try makeFixture()
         defer { fixture.cleanup() }
@@ -540,6 +632,11 @@ final class BrowserCaptureImportStoreTests: XCTestCase {
             "requestId": requestID,
             "payload": payload,
         ]
+    }
+
+    private func jsonRoundTrip(_ message: [String: Any]) throws -> [String: Any] {
+        let data = try JSONSerialization.data(withJSONObject: message)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
     private func split(_ value: String, maximumLength: Int) -> [String] {

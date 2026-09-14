@@ -25,7 +25,12 @@
         logicalWidth,
         logicalHeight
       });
-      const response = await options.sendMessage(request);
+      let response;
+      try {
+        response = await options.sendMessage(request);
+      } catch (_error) {
+        response = await options.sendMessage(request);
+      }
       if (options.isEnvelope(response, "capture.import.response") &&
           response.requestId === request.requestId &&
           response.payload.accepted === true) {

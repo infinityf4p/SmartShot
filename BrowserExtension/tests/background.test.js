@@ -7,17 +7,22 @@ const path = require("node:path");
 const vm = require("node:vm");
 const Core = require("../shared/core.js");
 const Delivery = require("../shared/delivery.js");
+const SELECTOR_PROTOCOL_VERSION = Core.SELECTOR_PROTOCOL_VERSION;
 
 function makeBackground(options = {}) {
   let messageListener;
   let actionListener;
   const captures = [];
+  const captureTimes = [];
   const nativeMessages = [];
   const downloadRequests = [];
   const scriptExecutions = [];
   const tabMessages = [];
   const actionUpdates = [];
+  const selectorDiagnostics = [];
   const activeTab = { id: 7, windowId: 3 };
+  let selectorActive = options.selectorActive === true;
+  let selectorCapturing = options.selectorCapturing === true;
   function returnAPIResult(task, callback) {
     if (options.api !== "chrome") return Promise.resolve().then(task);
     Promise.resolve().then(task).then(callback, (error) => {
@@ -26,6 +31,16 @@ function makeBackground(options = {}) {
       delete browser.runtime.lastError;
     });
   }
+  function returnActionResult(method, details, callback) {
+    actionUpdates.push({ method, details });
+    if (options.actionSynchronousError) throw options.actionSynchronousError;
+    return returnAPIResult(() => {
+      if (typeof options.actionHandler === "function") {
+        return options.actionHandler(method, details);
+      }
+      return undefined;
+    }, callback);
+  }
   const browser = {
     runtime: {
       onMessage: { addListener(listener) { messageListener = listener; } }
@@ -33,16 +48,13 @@ function makeBackground(options = {}) {
     action: {
       onClicked: { addListener(listener) { actionListener = listener; } },
       setBadgeText(details, callback) {
-        actionUpdates.push({ method: "setBadgeText", details });
-        return returnAPIResult(() => undefined, callback);
+        return returnActionResult("setBadgeText", details, callback);
       },
       setBadgeBackgroundColor(details, callback) {
-        actionUpdates.push({ method: "setBadgeBackgroundColor", details });
-        return returnAPIResult(() => undefined, callback);
+        return returnActionResult("setBadgeBackgroundColor", details, callback);
       },
       setTitle(details, callback) {
-        actionUpdates.push({ method: "setTitle", details });
-        return returnAPIResult(() => undefined, callback);
+        return returnActionResult("setTitle", details, callback);
       }
     },
     downloads: {
@@ -57,10 +69,23 @@ function makeBackground(options = {}) {
       }
     },
     tabs: {
-      async query() { return [{ ...activeTab }]; },
-      async captureVisibleTab(windowId) {
-        captures.push(windowId);
-        return "data:image/png;base64,frame";
+      query(query, callback) {
+        return returnAPIResult(() => {
+          const tab = options.activeTabs?.find((item) => item.windowId === query.windowId) || activeTab;
+          return [{ ...tab }];
+        }, callback);
+      },
+      captureVisibleTab(windowId, _details, callback) {
+        return returnAPIResult(() => {
+          const now = Date.now();
+          if (options.enforceCaptureQuota && captureTimes.filter((time) => now - time < 1000).length >= 2) {
+            throw new Error("This request exceeds the MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND quota.");
+          }
+          captureTimes.push(now);
+          captures.push(windowId);
+          if (typeof options.captureHandler === "function") return options.captureHandler(windowId);
+          return "data:image/png;base64,frame";
+        }, callback);
       },
       sendMessage(tabId, message, callback) {
         tabMessages.push({ tabId, message });
@@ -68,7 +93,17 @@ function makeBackground(options = {}) {
           if (typeof options.tabMessageHandler === "function") {
             return options.tabMessageHandler(tabId, message, tabMessages.length - 1);
           }
-          return Core.makeEnvelope("selection.state", { active: true }, message.requestId);
+          const action = message.type === "selection.command"
+            ? message.payload.action
+            : message.type.split(".").at(-1);
+          if (action === "toggle") selectorActive = !selectorActive;
+          else if (action === "start") selectorActive = true;
+          else if (action === "stop") selectorActive = false;
+          return Core.makeEnvelope("selection.state", {
+            active: selectorActive,
+            capturing: selectorCapturing,
+            selectorProtocolVersion: SELECTOR_PROTOCOL_VERSION
+          }, message.requestId);
         }, callback);
       }
     },
@@ -94,15 +129,43 @@ function makeBackground(options = {}) {
         });
     };
   } else if (typeof options.nativeHandler === "function") {
-    browser.runtime.sendNativeMessage = async (host, message) => {
-      nativeMessages.push({ host, message });
-      return options.nativeHandler(host, message);
+    browser.runtime.sendNativeMessage = (host, message, callback) => {
+      if (typeof callback !== "function") return undefined;
+      nativeMessages.push({ host, message, callbackProvided: true });
+      const returned = Promise.resolve()
+        .then(() => options.nativeHandler(host, message));
+      if (options.nativeCallbackNeverReturns) {
+        returned.catch(() => {});
+        return undefined;
+      }
+      returned.then((result) => {
+        const deliver = () => callback(result);
+        if (options.nativeCallbackDelay !== undefined) {
+          setTimeout(deliver, options.nativeCallbackDelay);
+        } else {
+          deliver();
+        }
+      }, (error) => {
+        browser.runtime.lastError = { message: error instanceof Error ? error.message : String(error) };
+        callback();
+        delete browser.runtime.lastError;
+      });
+      if (!options.nativePromiseAndCallback) return undefined;
+      if (Object.prototype.hasOwnProperty.call(options, "nativeReturnedPromiseValue")) {
+        return Promise.resolve(options.nativeReturnedPromiseValue);
+      }
+      if (options.nativeReturnedPromiseError) {
+        return Promise.reject(options.nativeReturnedPromiseError);
+      }
+      return returned;
     };
   }
+  const sandboxConsole = Object.create(console);
+  sandboxConsole.error = (...args) => selectorDiagnostics.push(args);
   const sandbox = {
     SmartShotCore: Core,
     atob,
-    console,
+    console: sandboxConsole,
     Date,
     navigator: {
       userAgent: options.api === "chrome"
@@ -151,6 +214,7 @@ function makeBackground(options = {}) {
     clickAction,
     downloadRequests,
     nativeMessages,
+    selectorDiagnostics,
     scriptExecutions,
     tabMessages,
     dispatch
@@ -168,6 +232,17 @@ function importAck(message, accepted = true, overrides = {}) {
   const payload = { accepted, stage };
   if (stage === "chunk") payload.index = message.payload.index;
   return Core.makeEnvelope("capture.import.ack", { ...payload, ...overrides }, message.requestId);
+}
+
+function currentSelectorState(message, active, requestId = message.requestId) {
+  const version = message.payload?.selectorProtocolVersion || SELECTOR_PROTOCOL_VERSION;
+  const payload = { active, selectorProtocolVersion: version };
+  if (version >= 3) payload.capturing = false;
+  return Core.makeEnvelope("selection.state", payload, requestId);
+}
+
+function legacySelectorState(message, active) {
+  return Core.makeEnvelope("selection.state", { active }, message.requestId);
 }
 
 test("long-capture protocol accepts and completes an ordered one-slice session", async () => {
@@ -191,6 +266,71 @@ test("long-capture protocol accepts and completes an ordered one-slice session",
   assert.equal(ended.type, "capture.long.ended");
   assert.equal(ended.payload.completed, true);
   assert.deepEqual(background.captures, [3, 3]);
+});
+
+test("long capture respects Chrome's quota across slices and verification frames", async () => {
+  const background = makeBackground({ api: "chrome", enforceCaptureQuota: true });
+  const requestId = "quota-long";
+  await background.dispatch(Core.makeEnvelope("capture.long.begin", { sliceCount: 2 }, requestId));
+  for (const index of [0, 1]) {
+    const response = await background.dispatch(Core.makeEnvelope("capture.slice.request", { index }, requestId));
+    assert.equal(response.type, "capture.slice.response", response.payload.message);
+  }
+  const ended = await background.dispatch(Core.makeEnvelope("capture.long.end", { cancelled: false }, requestId));
+  assert.equal(ended.payload.completed, true);
+  assert.equal(background.captures.length, 4);
+});
+
+test("concurrent visible captures share Chrome's quota across windows", async () => {
+  const activeTabs = [{ id: 7, windowId: 3 }, { id: 8, windowId: 4 }];
+  const background = makeBackground({ api: "chrome", enforceCaptureQuota: true, activeTabs });
+  const responses = await Promise.all([0, 1, 0].map((index, request) => background.dispatch(
+    Core.makeEnvelope("capture.request", {}, `quota-visible-${request}`),
+    { tab: activeTabs[index] }
+  )));
+  for (const response of responses) assert.equal(response.type, "capture.response", response.payload.message);
+  assert.deepEqual(background.captures, [3, 4, 3]);
+});
+
+test("capture queue recovers after a browser capture rejects", async () => {
+  let attempts = 0;
+  const background = makeBackground({
+    captureHandler() {
+      if (++attempts === 1) throw new Error("Capture unavailable");
+      return "data:image/png;base64,recovered";
+    }
+  });
+  const failed = await background.dispatch(Core.makeEnvelope("capture.request", {}, "failed-frame"));
+  assert.equal(failed.type, "error");
+  const recovered = await background.dispatch(Core.makeEnvelope("capture.request", {}, "recovered-frame"));
+  assert.equal(recovered.type, "capture.response");
+  assert.equal(recovered.payload.imageDataUrl, "data:image/png;base64,recovered");
+});
+
+test("queued capture rechecks the active tab before reading pixels", async () => {
+  const background = makeBackground();
+  await background.dispatch(Core.makeEnvelope("capture.request", {}, "initial-frame"));
+  const queued = background.dispatch(Core.makeEnvelope("capture.request", {}, "queued-frame"));
+  await new Promise(setImmediate);
+  background.activeTab.id = 8;
+  const response = await queued;
+  assert.equal(response.type, "error");
+  assert.match(response.payload.message, /active browser tab changed/);
+  assert.deepEqual(background.captures, [3]);
+});
+
+test("cancelling a long session prevents its queued frame from being captured", async () => {
+  const background = makeBackground();
+  await background.dispatch(Core.makeEnvelope("capture.request", {}, "initial-frame"));
+  const requestId = "cancelled-queued-session";
+  await background.dispatch(Core.makeEnvelope("capture.long.begin", { sliceCount: 1 }, requestId));
+  const queued = background.dispatch(Core.makeEnvelope("capture.slice.request", { index: 0 }, requestId));
+  await new Promise(setImmediate);
+  await background.dispatch(Core.makeEnvelope("capture.long.end", { cancelled: true }, requestId));
+  const response = await queued;
+  assert.equal(response.type, "error");
+  assert.match(response.payload.message, /session expired/);
+  assert.deepEqual(background.captures, [3]);
 });
 
 test("long capture stops when the user changes the active tab", async () => {
@@ -236,19 +376,177 @@ test("long capture rejects missing or out-of-order slices", async () => {
   assert.match(response.payload.message, /out of order/);
 });
 
-test("the action injects the selector into an already-open web page and retries once", async () => {
+test("the action probes an inactive current selector before starting it", async () => {
+  const background = makeBackground();
+
+  await background.clickAction();
+
+  assert.deepEqual(
+    background.tabMessages.map(({ message }) => message.payload.action),
+    ["status", "start"]
+  );
+  assert.equal(background.scriptExecutions.length, 0);
+  assert.equal(background.tabMessages[1].message.payload.selectorProtocolVersion, SELECTOR_PROTOCOL_VERSION);
+  assert.equal(
+    background.actionUpdates.find((update) => update.method === "setBadgeText").details.text,
+    ""
+  );
+});
+
+test("the action probes an active current selector before stopping it", async () => {
+  const background = makeBackground({ selectorActive: true });
+
+  await background.clickAction();
+
+  assert.deepEqual(
+    background.tabMessages.map(({ message }) => message.payload.action),
+    ["status", "stop"]
+  );
+  assert.equal(background.scriptExecutions.length, 0);
+});
+
+test("the action stops an in-flight capture instead of silently starting selection", async () => {
+  const background = makeBackground({ selectorCapturing: true });
+
+  await background.clickAction();
+
+  assert.deepEqual(
+    background.tabMessages.map(({ message }) => message.payload.action),
+    ["status", "stop"]
+  );
+  assert.equal(background.scriptExecutions.length, 0);
+});
+
+test("repeated actions on one tab are serialized as true toggles", async () => {
+  const background = makeBackground();
+
+  await Promise.all([background.clickAction(), background.clickAction()]);
+
+  assert.deepEqual(
+    background.tabMessages.map(({ message }) => message.payload.action),
+    ["status", "start", "status", "stop"]
+  );
+  assert.equal(background.scriptExecutions.length, 0);
+});
+
+test("an explicit state mismatch reinstalls the selector before retrying", async () => {
+  let startAttempts = 0;
   const background = makeBackground({
-    tabMessageHandler(_tabId, _message, index) {
-      if (index === 0) throw new Error("Could not establish connection. Receiving end does not exist.");
-      return Core.makeEnvelope("selection.state", { active: true }, _message.requestId);
+    tabMessageHandler(_tabId, message) {
+      if (message.type === "selection.command" && message.payload.action === "status") {
+        return currentSelectorState(message, false);
+      }
+      if (message.type === "selection.command" && message.payload.action === "start") {
+        startAttempts += 1;
+        return currentSelectorState(message, startAttempts > 1);
+      }
+      if (message.type === "selection.stop") return legacySelectorState(message, false);
+      throw new Error(`Unexpected selector message: ${message.type}`);
     }
   });
 
   await background.clickAction();
 
-  assert.equal(background.tabMessages.length, 2);
-  assert.equal(background.tabMessages[0].message.requestId, background.tabMessages[1].message.requestId);
-  assert.equal(background.tabMessages[1].message.type, "selection.toggle");
+  assert.deepEqual(
+    background.tabMessages.map(({ message }) => (
+      message.type === "selection.command" ? message.payload.action : message.type
+    )),
+    ["status", "start", "selection.stop", "start"]
+  );
+  assert.equal(startAttempts, 2);
+  assert.equal(background.scriptExecutions.length, 1);
+  assert.equal(
+    background.actionUpdates.find((update) => update.method === "setBadgeText").details.text,
+    ""
+  );
+});
+
+test("a queued action continues after the previous action fails", async () => {
+  let startAttempts = 0;
+  const background = makeBackground({
+    tabMessageHandler(_tabId, message) {
+      if (message.type === "selection.command" && message.payload.action === "status") {
+        return currentSelectorState(message, false);
+      }
+      if (message.type === "selection.command" && message.payload.action === "start") {
+        startAttempts += 1;
+        return currentSelectorState(message, startAttempts > 1);
+      }
+      if (message.type === "selection.stop") return legacySelectorState(message, false);
+      throw new Error(`Unexpected selector message: ${message.type}`);
+    },
+    scriptHandler() {
+      throw new Error("Fixture reinjection failure");
+    }
+  });
+
+  await Promise.all([background.clickAction(), background.clickAction()]);
+
+  assert.deepEqual(
+    background.tabMessages.map(({ message }) => (
+      message.type === "selection.command" ? message.payload.action : message.type
+    )),
+    ["status", "start", "selection.stop", "status", "start"]
+  );
+  assert.equal(startAttempts, 2);
+  assert.equal(background.scriptExecutions.length, 1);
+});
+
+test("selector actions on different tabs can probe in parallel", async () => {
+  const pendingStatus = new Map();
+  const background = makeBackground({
+    tabMessageHandler(tabId, message) {
+      if (message.type === "selection.command" && message.payload.action === "status") {
+        return new Promise((resolve) => {
+          pendingStatus.set(tabId, { message, resolve });
+        });
+      }
+      if (message.type === "selection.command" && message.payload.action === "start") {
+        return currentSelectorState(message, true);
+      }
+      throw new Error(`Unexpected selector message: ${message.type}`);
+    }
+  });
+
+  const first = background.clickAction({ id: 7, windowId: 3, url: "https://example.com/one" });
+  const second = background.clickAction({ id: 8, windowId: 3, url: "https://example.com/two" });
+  for (let attempt = 0; attempt < 10 && pendingStatus.size < 2; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.deepEqual(Array.from(pendingStatus.keys()).sort(), [7, 8]);
+  for (const { message, resolve } of pendingStatus.values()) {
+    resolve(currentSelectorState(message, false));
+  }
+  await Promise.all([first, second]);
+
+  for (const tabId of [7, 8]) {
+    assert.deepEqual(
+      background.tabMessages
+        .filter((entry) => entry.tabId === tabId)
+        .map(({ message }) => message.payload.action),
+      ["status", "start"]
+    );
+  }
+  assert.equal(background.scriptExecutions.length, 0);
+});
+
+test("the action injects the selector into an already-open web page with no receiver", async () => {
+  const background = makeBackground({
+    tabMessageHandler(_tabId, message, index) {
+      if (index < 5) throw new Error("Could not establish connection. Receiving end does not exist.");
+      return currentSelectorState(message, true);
+    }
+  });
+
+  await background.clickAction();
+
+  assert.deepEqual(
+    background.tabMessages.map(({ message }) => (
+      message.type === "selection.command" ? message.payload.action : message.type
+    )),
+    ["status", "toggle", "toggle", "selection.toggle", "selection.stop", "start"]
+  );
   assert.deepEqual(JSON.parse(JSON.stringify(background.scriptExecutions)), [{
     target: { tabId: 7, allFrames: false },
     files: [
@@ -263,6 +561,225 @@ test("the action injects the selector into an already-open web page and retries 
   assert.equal(finalActionUpdate.method, "setTitle");
   assert.equal(finalActionUpdate.details.tabId, 7);
   assert.equal(finalActionUpdate.details.title, "Select a content block");
+});
+
+test("injection waits for Safari message routing before starting the selector", async () => {
+  let injected = false;
+  let startAttempts = 0;
+  const background = makeBackground({
+    immediateTimeout: true,
+    tabMessageHandler(_tabId, message) {
+      if (!injected) throw new Error("Could not establish connection. Receiving end does not exist.");
+      const action = message.type === "selection.command" ? message.payload.action : message.type;
+      if (action === "start") {
+        startAttempts += 1;
+        if (startAttempts === 1) throw new Error("Could not establish connection. Receiving end does not exist.");
+        return currentSelectorState(message, true);
+      }
+      if (action === "status") return currentSelectorState(message, false);
+      throw new Error(`Unexpected selector message: ${message.type}`);
+    },
+    scriptHandler() {
+      injected = true;
+      return [];
+    }
+  });
+
+  await background.clickAction();
+
+  assert.equal(background.scriptExecutions.length, 1);
+  assert.equal(startAttempts, 2);
+  assert.deepEqual(
+    background.tabMessages.slice(-3).map(({ message }) => message.payload.action),
+    ["start", "status", "start"]
+  );
+  assert.deepEqual(background.selectorDiagnostics, []);
+  assert.equal(
+    background.actionUpdates.find((update) => update.method === "setBadgeText").details.text,
+    ""
+  );
+});
+
+test("an injection result error is reported with a sanitized inject stage", async () => {
+  const secret = "https://private.example/account/42";
+  const background = makeBackground({
+    tabMessageHandler() {
+      throw new Error("Could not establish connection. Receiving end does not exist.");
+    },
+    scriptHandler() {
+      return [{ frameId: 0, error: `Evaluation failed in ${secret}` }];
+    }
+  });
+
+  await background.clickAction();
+
+  assert.equal(background.scriptExecutions.length, 1);
+  assert.equal(background.selectorDiagnostics.length, 1);
+  const diagnosticText = background.selectorDiagnostics[0].join(" ");
+  assert.match(diagnosticText, /"stage":"inject"/);
+  assert.match(diagnosticText, /"tabId":7/);
+  assert.equal(diagnosticText.includes(secret), false);
+});
+
+test("feedback API failures preserve the original stage without leaking details", async () => {
+  const privatePage = "https://private.example/messages/secret";
+  const background = makeBackground({
+    tabMessageHandler() {
+      throw new Error("Could not establish connection. Receiving end does not exist.");
+    },
+    scriptHandler() {
+      throw new Error(`Permission denied for ${privatePage}`);
+    },
+    actionSynchronousError: new Error(`Toolbar update failed for ${privatePage}`)
+  });
+
+  await background.clickAction();
+
+  const diagnosticText = background.selectorDiagnostics.map((args) => args.join(" ")).join("\n");
+  assert.match(diagnosticText, /"stage":"inject"/);
+  assert.match(diagnosticText, /"stage":"feedback"/);
+  assert.equal(diagnosticText.includes(privatePage), false);
+  assert.equal(background.actionUpdates.length, 3);
+});
+
+test("migration preserves toggle-off when a legacy selector was active", async () => {
+  let legacyActive = true;
+  const background = makeBackground({
+    tabMessageHandler(_tabId, message) {
+      if (message.type === "selection.command" && message.payload.action === "status") return undefined;
+      if (message.type === "selection.toggle") {
+        legacyActive = !legacyActive;
+        return legacySelectorState(message, legacyActive);
+      }
+      if (message.type === "selection.stop") {
+        legacyActive = false;
+        return legacySelectorState(message, false);
+      }
+      if (message.type === "selection.command" && message.payload.action === "stop") {
+        return currentSelectorState(message, false);
+      }
+      throw new Error(`Unexpected selector message: ${message.type}`);
+    }
+  });
+
+  await background.clickAction();
+
+  assert.equal(background.scriptExecutions.length, 1);
+  assert.deepEqual(
+    background.tabMessages.map(({ message }) => (
+      message.type === "selection.command" ? message.payload.action : message.type
+    )),
+    ["status", "toggle", "toggle", "selection.toggle", "selection.stop", "stop"]
+  );
+  assert.equal(legacyActive, false);
+});
+
+test("migration preserves toggle-on when a legacy selector was inactive", async () => {
+  let legacyActive = false;
+  const background = makeBackground({
+    tabMessageHandler(_tabId, message) {
+      if (message.type === "selection.command" && message.payload.action === "status") return undefined;
+      if (message.type === "selection.toggle") {
+        legacyActive = !legacyActive;
+        return legacySelectorState(message, legacyActive);
+      }
+      if (message.type === "selection.stop") {
+        legacyActive = false;
+        return legacySelectorState(message, false);
+      }
+      if (message.type === "selection.command" && message.payload.action === "start") {
+        return currentSelectorState(message, true);
+      }
+      throw new Error(`Unexpected selector message: ${message.type}`);
+    }
+  });
+
+  await background.clickAction();
+
+  assert.equal(background.scriptExecutions.length, 1);
+  assert.deepEqual(
+    background.tabMessages.map(({ message }) => (
+      message.type === "selection.command" ? message.payload.action : message.type
+    )),
+    ["status", "toggle", "toggle", "selection.toggle", "selection.stop", "start"]
+  );
+});
+
+test("migration preserves state from a versioned receiver without status support", async () => {
+  let active = true;
+  const background = makeBackground({
+    tabMessageHandler(_tabId, message) {
+      if (message.type === "selection.command" && message.payload.action === "status") return undefined;
+      if (message.type === "selection.command" &&
+          message.payload.action === "toggle" &&
+          message.payload.selectorProtocolVersion === SELECTOR_PROTOCOL_VERSION) {
+        return undefined;
+      }
+      if (message.type === "selection.command" &&
+          message.payload.action === "toggle" &&
+          message.payload.selectorProtocolVersion === SELECTOR_PROTOCOL_VERSION - 1) {
+        active = !active;
+        return currentSelectorState(message, active);
+      }
+      if (message.type === "selection.stop") {
+        active = false;
+        return legacySelectorState(message, false);
+      }
+      if (message.type === "selection.command" && message.payload.action === "stop") {
+        return currentSelectorState(message, false);
+      }
+      throw new Error(`Unexpected selector message: ${message.type}`);
+    }
+  });
+
+  await background.clickAction();
+
+  assert.deepEqual(
+    background.tabMessages.map(({ message }) => (
+      message.type === "selection.command" ? message.payload.action : message.type
+    )),
+    ["status", "toggle", "toggle", "selection.stop", "stop"]
+  );
+  assert.equal(active, false);
+  assert.equal(background.scriptExecutions.length, 1);
+});
+
+test("the action replaces a selector state with the wrong request ID", async () => {
+  const background = makeBackground({
+    tabMessageHandler(_tabId, message, index) {
+      if (index === 0) return currentSelectorState(message, false, "wrong-request");
+      if (message.type === "selection.toggle") return undefined;
+      if (message.type === "selection.stop") return legacySelectorState(message, false);
+      return currentSelectorState(message, true);
+    }
+  });
+
+  await background.clickAction();
+
+  assert.equal(background.scriptExecutions.length, 1);
+  assert.equal(background.tabMessages.length, 4);
+  assert.equal(background.tabMessages.at(-1).message.payload.action, "start");
+});
+
+test("the action reports a selector that remains invalid after reinjection", async () => {
+  const background = makeBackground({
+    immediateTimeout: true,
+    tabMessageHandler() { return undefined; }
+  });
+
+  await background.clickAction();
+
+  assert.equal(background.scriptExecutions.length, 1);
+  assert.equal(background.tabMessages.length, 9);
+  assert.match(background.selectorDiagnostics[0].join(" "), /"stage":"ready"/);
+  assert.equal(
+    background.actionUpdates.find((update) => update.method === "setBadgeText").details.text,
+    "!"
+  );
+  assert.match(
+    background.actionUpdates.find((update) => update.method === "setTitle").details.title,
+    /could not start/
+  );
 });
 
 test("the action does not attempt script injection into browser-internal pages", async () => {
@@ -308,14 +825,14 @@ test("Chromium callback APIs inject and retry the action on an existing page", a
   const background = makeBackground({
     api: "chrome",
     tabMessageHandler(_tabId, message, index) {
-      if (index === 0) throw new Error("Receiving end does not exist.");
-      return Core.makeEnvelope("selection.state", { active: true }, message.requestId);
+      if (index < 5) throw new Error("Receiving end does not exist.");
+      return currentSelectorState(message, true);
     }
   });
 
   await background.clickAction();
 
-  assert.equal(background.tabMessages.length, 2);
+  assert.equal(background.tabMessages.length, 6);
   assert.equal(background.scriptExecutions.length, 1);
   assert.equal(background.scriptExecutions[0].target.tabId, 7);
 });
@@ -364,6 +881,80 @@ test("native import sanitizes metadata and sends bounded chunks in order", async
   assert.deepEqual(chunks.map((message) => message.payload.index), [0, 1]);
   assert.ok(chunks.every((message) => message.payload.data.length <= 192 * 1024));
   assert.equal(chunks.map((message) => message.payload.data).join(""), imageDataUrl.split(",")[1]);
+});
+
+test("concurrent and completed duplicate imports share one native task", async () => {
+  let signalBeginStarted;
+  const beginStarted = new Promise((resolve) => { signalBeginStarted = resolve; });
+  let releaseBegin;
+  const beginGate = new Promise((resolve) => { releaseBegin = resolve; });
+  const background = makeBackground({
+    api: "chrome",
+    async nativeHandler(_host, message) {
+      if (message.type === "capture.import.begin") {
+        signalBeginStarted();
+        await beginGate;
+      }
+      return importAck(message);
+    }
+  });
+  const request = Core.makeEnvelope("capture.import.request", {
+    imageDataUrl: pngDataURL(32),
+    filename: "capture",
+    kind: "block",
+    sourceOrigin: "https://example.com/article",
+    logicalWidth: 400,
+    logicalHeight: 300
+  }, "7a2f2fc3-ab84-4a0d-9c16-354be8666f23");
+
+  const first = background.dispatch(request);
+  await beginStarted;
+  const second = background.dispatch(request);
+  releaseBegin();
+  const [firstResponse, secondResponse] = await Promise.all([first, second]);
+  const completedResponse = await background.dispatch(request);
+
+  assert.strictEqual(secondResponse, firstResponse);
+  assert.strictEqual(completedResponse, firstResponse);
+  assert.equal(firstResponse.payload.accepted, true);
+  assert.deepEqual(
+    background.nativeMessages.map(({ message }) => message.type),
+    ["capture.import.begin", "capture.import.chunk", "capture.import.end"]
+  );
+  assert.equal(background.downloadRequests.length, 0);
+});
+
+test("duplicate imports share one completed background download fallback", async () => {
+  const background = makeBackground({
+    api: "chrome",
+    nativeHandler() {
+      throw new Error("Native host unavailable.");
+    }
+  });
+  const request = Core.makeEnvelope("capture.import.request", {
+    imageDataUrl: pngDataURL(32),
+    filename: "capture",
+    kind: "block",
+    sourceOrigin: "https://example.com/article",
+    logicalWidth: 400,
+    logicalHeight: 300
+  }, "85078192-dba1-4cf4-867a-55a65966669f");
+
+  const [firstResponse, secondResponse] = await Promise.all([
+    background.dispatch(request),
+    background.dispatch(request)
+  ]);
+  const completedResponse = await background.dispatch(request);
+
+  assert.strictEqual(secondResponse, firstResponse);
+  assert.strictEqual(completedResponse, firstResponse);
+  assert.equal(firstResponse.payload.handledBy, "browser");
+  assert.equal(firstResponse.payload.downloaded, true);
+  assert.deepEqual(
+    background.nativeMessages.map(({ message }) => message.type),
+    ["capture.import.begin"]
+  );
+  assert.equal(background.downloadRequests.length, 1);
 });
 
 test("native import stops on a rejected chunk and returns a browser fallback", async () => {
@@ -596,6 +1187,180 @@ test("missing, callback-failed, and timed-out native hosts return fallback respo
     assert.equal(response.payload.accepted, false);
     assert.equal(background.nativeMessages.length, 1);
   });
+});
+
+test("Safari native messaging uses the callback overload and completes import", async () => {
+  const background = makeBackground({
+    nativeCallbackOnly: true,
+    nativeHandler(_host, message) {
+      return importAck(message);
+    }
+  });
+  const response = await background.dispatch(Core.makeEnvelope("capture.import.request", {
+    imageDataUrl: pngDataURL(32),
+    filename: "capture",
+    kind: "block",
+    sourceOrigin: "https://example.com",
+    logicalWidth: 400,
+    logicalHeight: 300
+  }, "ff0fa898-65e5-4a53-9136-35d04b490854"));
+
+  assert.equal(response.payload.accepted, true);
+  assert.equal(response.payload.handledBy, "native");
+  assert.deepEqual(
+    background.nativeMessages.map(({ host, message, callbackProvided }) => ({
+      host,
+      type: message.type,
+      callbackProvided
+    })),
+    [
+      { host: Core.NATIVE_HOSTS.safari, type: "capture.import.begin", callbackProvided: true },
+      { host: Core.NATIVE_HOSTS.safari, type: "capture.import.chunk", callbackProvided: true },
+      { host: Core.NATIVE_HOSTS.safari, type: "capture.import.end", callbackProvided: true }
+    ]
+  );
+});
+
+test("Safari runtime.lastError falls back to one browser download", async () => {
+  const imageDataUrl = pngDataURL(32);
+  const background = makeBackground({
+    nativeCallbackOnly: true,
+    nativeHandler() {
+      throw new Error("Safari native host rejected the message.");
+    }
+  });
+  const response = await background.dispatch(Core.makeEnvelope("capture.import.request", {
+    imageDataUrl,
+    filename: "capture",
+    kind: "block",
+    sourceOrigin: "https://example.com",
+    logicalWidth: 400,
+    logicalHeight: 300
+  }, "0bd0fbdb-f1c4-4ad5-848a-cd9fc6ae45af"));
+
+  assert.equal(response.payload.accepted, false);
+  assert.equal(response.payload.handledBy, "browser");
+  assert.equal(response.payload.downloaded, true);
+  assert.deepEqual(
+    background.nativeMessages.map(({ message }) => message.type),
+    ["capture.import.begin"]
+  );
+  assert.equal(background.downloadRequests.length, 1);
+  assert.equal(background.downloadRequests[0].url, imageDataUrl);
+});
+
+test("Safari callback timeout falls back to one browser download", async () => {
+  const imageDataUrl = pngDataURL(32);
+  const background = makeBackground({
+    immediateTimeout: true,
+    nativeCallbackOnly: true,
+    nativeCallbackNeverReturns: true,
+    nativeHandler(_host, message) {
+      return importAck(message);
+    }
+  });
+  const response = await background.dispatch(Core.makeEnvelope("capture.import.request", {
+    imageDataUrl,
+    filename: "capture",
+    kind: "block",
+    sourceOrigin: "https://example.com",
+    logicalWidth: 400,
+    logicalHeight: 300
+  }, "d4267d4a-0484-4099-999a-388cd75ce57d"));
+
+  assert.equal(response.payload.accepted, false);
+  assert.equal(response.payload.handledBy, "browser");
+  assert.equal(response.payload.downloaded, true);
+  assert.deepEqual(
+    background.nativeMessages.map(({ message }) => message.type),
+    ["capture.import.begin"]
+  );
+  assert.equal(background.downloadRequests.length, 1);
+  assert.equal(background.downloadRequests[0].url, imageDataUrl);
+});
+
+test("Safari Promise and callback completion settles each import stage once", async () => {
+  const background = makeBackground({
+    nativeCallbackOnly: true,
+    nativePromiseAndCallback: true,
+    nativeHandler(_host, message) {
+      return importAck(message);
+    }
+  });
+  const response = await background.dispatch(Core.makeEnvelope("capture.import.request", {
+    imageDataUrl: pngDataURL(32),
+    filename: "capture",
+    kind: "block",
+    sourceOrigin: "https://example.com",
+    logicalWidth: 400,
+    logicalHeight: 300
+  }, "243d797a-ea65-45f6-a982-3db5e86897e8"));
+
+  assert.equal(response.payload.accepted, true);
+  assert.equal(response.payload.handledBy, "native");
+  assert.equal(response.payload.downloaded, false);
+  assert.deepEqual(
+    background.nativeMessages.map(({ message }) => message.type),
+    ["capture.import.begin", "capture.import.chunk", "capture.import.end"]
+  );
+  assert.ok(background.nativeMessages.every(({ callbackProvided }) => callbackProvided === true));
+  assert.equal(background.downloadRequests.length, 0);
+});
+
+test("Safari ignores an early empty Promise result and waits for the callback ACK", async () => {
+  const background = makeBackground({
+    nativeCallbackOnly: true,
+    nativePromiseAndCallback: true,
+    nativeReturnedPromiseValue: undefined,
+    nativeCallbackDelay: 0,
+    nativeHandler(_host, message) {
+      return importAck(message);
+    }
+  });
+  const response = await background.dispatch(Core.makeEnvelope("capture.import.request", {
+    imageDataUrl: pngDataURL(32),
+    filename: "capture",
+    kind: "block",
+    sourceOrigin: "https://example.com",
+    logicalWidth: 400,
+    logicalHeight: 300
+  }, "2a676c2e-3ea2-4fd9-a095-86e9bd208b7d"));
+
+  assert.equal(response.payload.accepted, true);
+  assert.equal(response.payload.handledBy, "native");
+  assert.deepEqual(
+    background.nativeMessages.map(({ message }) => message.type),
+    ["capture.import.begin", "capture.import.chunk", "capture.import.end"]
+  );
+  assert.equal(background.downloadRequests.length, 0);
+});
+
+test("Safari ignores a returned Promise rejection and waits for the callback ACK", async () => {
+  const background = makeBackground({
+    nativeCallbackOnly: true,
+    nativePromiseAndCallback: true,
+    nativeReturnedPromiseError: new Error("Safari Promise path rejected"),
+    nativeCallbackDelay: 0,
+    nativeHandler(_host, message) {
+      return importAck(message);
+    }
+  });
+  const response = await background.dispatch(Core.makeEnvelope("capture.import.request", {
+    imageDataUrl: pngDataURL(32),
+    filename: "capture",
+    kind: "block",
+    sourceOrigin: "https://example.com",
+    logicalWidth: 400,
+    logicalHeight: 300
+  }, "a84080cf-ce88-4ccb-b10a-8cfeeb949630"));
+
+  assert.equal(response.payload.accepted, true);
+  assert.equal(response.payload.handledBy, "native");
+  assert.deepEqual(
+    background.nativeMessages.map(({ message }) => message.type),
+    ["capture.import.begin", "capture.import.chunk", "capture.import.end"]
+  );
+  assert.equal(background.downloadRequests.length, 0);
 });
 
 test("a native failure after accepted chunks still downloads the completed PNG", async () => {

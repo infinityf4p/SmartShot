@@ -127,6 +127,10 @@ test("protocol envelopes are versioned and type-checkable", () => {
   assert.equal(Core.isEnvelope(envelope, "capture.response"), false);
 });
 
+test("selector commands use a shared controller protocol version", () => {
+  assert.equal(Core.SELECTOR_PROTOCOL_VERSION, 3);
+});
+
 test("generated request IDs remain native-compatible without Web Crypto", () => {
   const sandbox = {
     Date,

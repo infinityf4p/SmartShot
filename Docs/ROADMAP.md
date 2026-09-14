@@ -17,7 +17,7 @@ Implemented in the current checkout as of 2026-08-24:
 - Browser semantic single-block capture, including X single-post fixtures, bounded browser scrolling/stitching with heuristic two-frame slice checks, Chromium/Safari two-phase native PNG import, one-outstanding app admission, background-owned download fallback, and Safari status/settings entry points.
 - User-visible single-display/region recording with system audio, optional microphone, pointer/frame-size settings, H.264/AAC MP4 output, preview/file actions, and bounded GIF export.
 
-The current automated gates pass 199/199 Swift/XCTest and 67/67 browser Node tests. Automated coverage is not a substitute for the remaining signed GUI and real-browser acceptance work.
+The current automated gates pass 199/199 native Swift and 93/93 browser Node tests. Automated coverage is not a substitute for the remaining signed GUI and real-browser acceptance work.
 
 ## Milestone 1: Stabilize the Current Native Product
 
@@ -37,12 +37,12 @@ Exit gate: no known stuck-input, wrong-display, captured-overlay, destructive-ou
 
 Outcome: promote the implemented browser bridge from automated evidence to a real compatibility statement.
 
-Recorded on 2026-08-24: a byte-identical universal Release app is installed at `/Applications/SmartShot.app`; all embedded executables passed strict deep signature verification; Chromium manifests validate for detected browsers; and stale Safari registrations were reduced to the single installed extension. These are artifact/setup results only. The protected browser enablement and end-to-end capture items below remain open.
+Recorded on 2026-08-24: universal native **0.2.1 (build 7)** is installed and running from `/Applications/SmartShot.app`; all embedded executables passed strict deep signature verification; Chromium manifests validate for detected browsers; stale Safari registrations were cleaned to one fresh `Sign to Run Locally` Clean7 WebExtension registration; and an earlier complete 0.2.1 development build was listed and enabled in Safari with its shortcut and toolbar action visible. These are artifact/setup results only. A physical Safari action, Chromium reload, and end-to-end capture remain open.
 
 - Package and install the current complete app at `/Applications/SmartShot.app`.
 - Verify helper executability and Chromium manifests for Chrome, Chromium, Edge, and Brave.
 - Use Chromium's user-controlled Developer mode / **Load unpacked** UI to load the pinned unpacked extension and verify its expected ID.
-- For the current self-signed build, enable Safari's per-process unsigned-extension development override, enable the embedded extension, and test Website Access denial/recovery. Verify the override resets after Safari quits; remove this development dependency through proper distribution signing.
+- For Safari development, use Apple development signing or a complete **Sign to Run Locally** container/extension build, then enable Safari's per-process unsigned-extension override when required. Test a physical action plus Website Access denial/recovery, verify the override resets after Safari quits, and remove this development dependency through proper distribution signing. Do not expect the custom persistent self-signed `/Applications` build to become a valid Safari extension merely from the override.
 - Run visible and tall controlled fixtures through native preview and forced download fallback.
 - Verify phase-two app acceptance, a second overlapping import rejection, termination, and ten-second timeout cleanup without replacing the active preview.
 - Run public X timeline/detail cases for text, media, quoted posts, replies/reposts, logged-out state, light/dark mode, and current DOM changes.

@@ -41,14 +41,28 @@ struct GIFFramePlan: Equatable, Sendable {
         duration = min(videoDuration, options.maximumDuration)
         frameRate = options.frameRate
         maximumLongEdge = options.maximumLongEdge
-        frameCount = max(1, min(
+        let requestedFrameCount = max(1, min(
             Int(ceil(duration * Double(frameRate))),
             Int(GIFExportOptions.maximumSupportedDuration)
                 * GIFExportOptions.maximumSupportedFrameRate
         ))
+        let durationCentiseconds = max(2, Int((duration * 100).rounded()))
+        let lastFrameStart = Int((Double(requestedFrameCount - 1) * 100 / Double(frameRate)).rounded())
+        // Fold a sub-20 ms tail into the preceding frame to avoid decoder delay clamping.
+        frameCount = requestedFrameCount > 1 && durationCentiseconds - lastFrameStart < 2
+            ? requestedFrameCount - 1
+            : requestedFrameCount
     }
 
-    var frameDelay: TimeInterval { 1 / Double(frameRate) }
+    func frameDelay(at index: Int) -> TimeInterval {
+        precondition((0..<frameCount).contains(index))
+        // Quantize cumulative boundaries so GIF's centisecond rounding cannot accumulate.
+        let start = Int((Double(index) * 100 / Double(frameRate)).rounded())
+        let end = index == frameCount - 1
+            ? max(2, Int((duration * 100).rounded()))
+            : Int((Double(index + 1) * 100 / Double(frameRate)).rounded())
+        return Double(end - start) / 100
+    }
 
     func time(at index: Int) -> CMTime {
         precondition((0..<frameCount).contains(index))
@@ -130,13 +144,6 @@ enum GIFExportService {
                 ]
             ] as CFDictionary
         )
-        let frameProperties = [
-            kCGImagePropertyGIFDictionary: [
-                kCGImagePropertyGIFDelayTime: plan.frameDelay,
-                kCGImagePropertyGIFUnclampedDelayTime: plan.frameDelay
-            ]
-        ] as CFDictionary
-
         do {
             for index in 0..<plan.frameCount {
                 try Task.checkCancellation()
@@ -144,6 +151,12 @@ enum GIFExportService {
                     with: generatorBox,
                     at: plan.time(at: index)
                 )
+                let frameProperties = [
+                    kCGImagePropertyGIFDictionary: [
+                        kCGImagePropertyGIFDelayTime: plan.frameDelay(at: index),
+                        kCGImagePropertyGIFUnclampedDelayTime: plan.frameDelay(at: index)
+                    ]
+                ] as CFDictionary
                 CGImageDestinationAddImage(destination, image, frameProperties)
             }
             try Task.checkCancellation()

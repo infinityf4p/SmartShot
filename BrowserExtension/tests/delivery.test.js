@@ -43,6 +43,10 @@ test("manifest pins the Chromium extension identity", () => {
   assert.ok(manifest.permissions.includes("activeTab"));
   assert.ok(manifest.permissions.includes("downloads"));
   assert.ok(manifest.permissions.includes("scripting"));
+  assert.deepEqual(manifest.commands._execute_action.suggested_key, {
+    default: "Ctrl+Shift+9",
+    mac: "MacCtrl+Shift+9"
+  });
 });
 
 test("accepted native import suppresses the browser download", async () => {
@@ -90,13 +94,56 @@ test("a background download survives content-page teardown without a duplicate",
   assert.deepEqual(downloads, []);
 });
 
+test("a lost native response retries the same request without a content download", async () => {
+  const downloads = [];
+  const requests = [];
+  const result = await Delivery.importOrDownload(options(async (request) => {
+    requests.push(request);
+    if (requests.length === 1) throw new Error("The first response was lost.");
+    return Core.makeEnvelope("capture.import.response", {
+      accepted: true,
+      handledBy: "native",
+      downloaded: false
+    }, request.requestId);
+  }, downloads));
+
+  assert.deepEqual(result, { handledBy: "native" });
+  assert.equal(requests.length, 2);
+  assert.strictEqual(requests[1], requests[0]);
+  assert.equal(requests[1].requestId, requests[0].requestId);
+  assert.deepEqual(downloads, []);
+});
+
+test("a lost background-download response retries without a content download", async () => {
+  const downloads = [];
+  const requests = [];
+  const result = await Delivery.importOrDownload(options(async (request) => {
+    requests.push(request);
+    if (requests.length === 1) throw new Error("The first response was lost.");
+    return Core.makeEnvelope("capture.import.response", {
+      accepted: false,
+      handledBy: "browser",
+      downloaded: true
+    }, request.requestId);
+  }, downloads));
+
+  assert.deepEqual(result, { handledBy: "browser" });
+  assert.equal(requests.length, 2);
+  assert.strictEqual(requests[1], requests[0]);
+  assert.equal(requests[1].requestId, requests[0].requestId);
+  assert.deepEqual(downloads, []);
+});
+
 test("native messaging failures preserve the browser download fallback", async () => {
   const downloads = [];
+  let requests = 0;
   const result = await Delivery.importOrDownload(options(async () => {
+    requests += 1;
     throw new Error("native messaging failed");
   }, downloads));
 
   assert.deepEqual(result, { handledBy: "browser" });
+  assert.equal(requests, 2);
   assert.equal(downloads.length, 1);
 });
 

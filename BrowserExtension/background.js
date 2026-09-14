@@ -6,8 +6,12 @@ const extensionApi = globalThis.browser || globalThis.chrome;
 const Core = globalThis.SmartShotCore;
 const isPromiseApi = typeof globalThis.browser !== "undefined";
 const longCaptureSessions = new Map();
-const SLICE_INTERVAL_MS = 550;
-const STABILITY_PROBE_INTERVAL_MS = 120;
+const selectorActionQueues = new Map();
+const importRequestTasks = new Map();
+const CAPTURE_INTERVAL_MS = 550;
+let captureFrameQueue = Promise.resolve();
+let lastFrameCaptureAt = -Infinity;
+const IMPORT_REQUEST_CACHE_LIMIT = 32;
 const IMPORT_MAX_BYTES = 64 * 1024 * 1024;
 const IMPORT_CHUNK_BASE64_CHARACTERS = 192 * 1024;
 const IMPORT_ACK_TIMEOUT_MS = 5000;
@@ -15,6 +19,8 @@ const IMPORT_END_ACK_TIMEOUT_MS = 15000;
 const IMPORT_MAX_LOGICAL_DIMENSION = 20000;
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const ACTION_DEFAULT_TITLE = "Select a content block";
+const SELECTOR_PROTOCOL_VERSION = Core.SELECTOR_PROTOCOL_VERSION;
+const SELECTOR_READY_RETRY_DELAYS_MS = Object.freeze([25, 50, 100]);
 const CONTENT_SCRIPT_FILES = Object.freeze([
   "shared/core.js",
   "shared/selection.js",
@@ -37,10 +43,13 @@ function invoke(object, method, args) {
   });
 }
 
-function nativeHostName() {
+function isSafariRuntime() {
   const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  const safari = /Safari/i.test(userAgent) && !/(Chrome|Chromium|Edg)/i.test(userAgent);
-  return safari ? Core.NATIVE_HOSTS.safari : Core.NATIVE_HOSTS.chromium;
+  return /Safari/i.test(userAgent) && !/(Chrome|Chromium|Edg)/i.test(userAgent);
+}
+
+function nativeHostName() {
+  return isSafariRuntime() ? Core.NATIVE_HOSTS.safari : Core.NATIVE_HOSTS.chromium;
 }
 
 function withTimeout(promise, milliseconds) {
@@ -125,9 +134,45 @@ function isImportAck(response, requestId, stage, index) {
   return stage !== "chunk" || response.payload.index === index;
 }
 
+function invokeNativeMessage(host, message) {
+  if (!isSafariRuntime()) {
+    return invoke(extensionApi.runtime, "sendNativeMessage", [host, message]);
+  }
+
+  // Safari officially supports both Promise and callback forms. Use one
+  // callback-style invocation because real-browser acceptance found completed
+  // native ACK delivery unreliable through the Promise form.
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = (task, value) => {
+      if (settled) return;
+      settled = true;
+      task(value);
+    };
+    const callback = (result) => {
+      const error = extensionApi.runtime.lastError ||
+        (globalThis.chrome && chrome.runtime.lastError);
+      if (error) settle(reject, new Error(error.message || "Safari native messaging failed."));
+      else settle(resolve, result);
+    };
+
+    try {
+      const returned = extensionApi.runtime.sendNativeMessage(host, message, callback);
+      if (returned && typeof returned.then === "function") {
+        // Safari may still return a Promise when the callback overload is used.
+        // Its value is not the callback acknowledgement and must not win the
+        // race; only absorb rejection so the compatibility call stays quiet.
+        Promise.resolve(returned).catch(() => {});
+      }
+    } catch (error) {
+      settle(reject, error);
+    }
+  });
+}
+
 async function sendNativeImportMessage(message, timeout = IMPORT_ACK_TIMEOUT_MS) {
   return withTimeout(
-    invoke(extensionApi.runtime, "sendNativeMessage", [nativeHostName(), message]),
+    invokeNativeMessage(nativeHostName(), message),
     timeout
   );
 }
@@ -218,6 +263,19 @@ async function handleImportRequest(message) {
   }, message.requestId);
 }
 
+function importTaskFor(message) {
+  const existing = importRequestTasks.get(message.requestId);
+  if (existing) return existing;
+
+  const task = Promise.resolve().then(() => handleImportRequest(message));
+  importRequestTasks.set(message.requestId, task);
+  while (importRequestTasks.size > IMPORT_REQUEST_CACHE_LIMIT) {
+    const oldestRequestId = importRequestTasks.keys().next().value;
+    importRequestTasks.delete(oldestRequestId);
+  }
+  return task;
+}
+
 async function captureVisible(sender) {
   if (!extensionApi.tabs || typeof extensionApi.tabs.captureVisibleTab !== "function") {
     throw new Error("This browser requires the SmartShot native app for capture.");
@@ -226,13 +284,25 @@ async function captureVisible(sender) {
     throw new Error("The capture request did not originate from a browser tab.");
   }
 
-  await assertActiveCaptureTab(sender.tab.id, sender.tab.windowId);
-  const imageDataUrl = await invoke(extensionApi.tabs, "captureVisibleTab", [
-    sender.tab.windowId,
-    { format: "png" }
-  ]);
-  await assertActiveCaptureTab(sender.tab.id, sender.tab.windowId);
-  return imageDataUrl;
+  return captureFrame(sender.tab.id, sender.tab.windowId);
+}
+
+function captureFrame(tabId, windowId, validateSession = () => {}) {
+  // Chrome allows two calls per second across the extension, including verification frames.
+  const task = captureFrameQueue.then(async () => {
+    const wait = CAPTURE_INTERVAL_MS - (Date.now() - lastFrameCaptureAt);
+    if (wait > 0) await delay(wait);
+    validateSession();
+    await assertActiveCaptureTab(tabId, windowId);
+    validateSession();
+    lastFrameCaptureAt = Date.now();
+    const imageDataUrl = await invoke(extensionApi.tabs, "captureVisibleTab", [windowId, { format: "png" }]);
+    validateSession();
+    await assertActiveCaptureTab(tabId, windowId);
+    return imageDataUrl;
+  });
+  captureFrameQueue = task.catch(() => {});
+  return task;
 }
 
 async function assertActiveCaptureTab(tabId, windowId) {
@@ -291,8 +361,7 @@ async function handleLongCaptureBegin(message, sender) {
     url: typeof sender.url === "string" ? sender.url : null,
     sliceCount,
     nextIndex: 0,
-    deadline: Date.now() + Core.CAPTURE_LIMITS.maxDurationMs,
-    lastCaptureAt: 0
+    deadline: Date.now() + Core.CAPTURE_LIMITS.maxDurationMs
   };
   longCaptureSessions.set(message.requestId, session);
   expireSession(message.requestId, session);
@@ -305,30 +374,10 @@ async function handleSliceRequest(message, sender) {
   if (index !== session.nextIndex || index >= session.sliceCount) {
     throw new Error("Long-capture slices arrived out of order.");
   }
-  await assertActiveCaptureTab(session.tabId, session.windowId);
-
-  const wait = SLICE_INTERVAL_MS - (Date.now() - session.lastCaptureAt);
-  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-  sessionFor(message, sender);
-  await assertActiveCaptureTab(session.tabId, session.windowId);
-
-  const imageDataUrl = await invoke(extensionApi.tabs, "captureVisibleTab", [
-    session.windowId,
-    { format: "png" }
-  ]);
-  sessionFor(message, sender);
-  await assertActiveCaptureTab(session.tabId, session.windowId);
-
-  await new Promise((resolve) => setTimeout(resolve, STABILITY_PROBE_INTERVAL_MS));
-  sessionFor(message, sender);
-  await assertActiveCaptureTab(session.tabId, session.windowId);
-  const verificationImageDataUrl = await invoke(extensionApi.tabs, "captureVisibleTab", [
-    session.windowId,
-    { format: "png" }
-  ]);
-  sessionFor(message, sender);
-  await assertActiveCaptureTab(session.tabId, session.windowId);
-  session.lastCaptureAt = Date.now();
+  const validateSession = () => sessionFor(message, sender);
+  const imageDataUrl = await captureFrame(session.tabId, session.windowId, validateSession);
+  const verificationImageDataUrl = await captureFrame(session.tabId, session.windowId, validateSession);
+  validateSession();
   session.nextIndex += 1;
   return Core.makeEnvelope("capture.slice.response", {
     index,
@@ -362,7 +411,7 @@ extensionApi.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   let task;
   if (message.type === "capture.request") task = handleCaptureRequest(message, sender);
-  else if (message.type === "capture.import.request") task = handleImportRequest(message);
+  else if (message.type === "capture.import.request") task = importTaskFor(message);
   else if (message.type === "capture.long.begin") task = handleLongCaptureBegin(message, sender);
   else if (message.type === "capture.slice.request") task = handleSliceRequest(message, sender);
   else if (message.type === "capture.long.end") task = Promise.resolve().then(() => handleLongCaptureEnd(message, sender));
@@ -392,20 +441,189 @@ function canInjectIntoTab(tab) {
   }
 }
 
-async function toggleSelectionInTab(tab, message) {
+function selectorCommand(action) {
+  return Core.makeEnvelope("selection.command", {
+    action,
+    selectorProtocolVersion: SELECTOR_PROTOCOL_VERSION
+  });
+}
+
+function selectorStageError(stage, error) {
+  if (error && typeof error === "object" && typeof error.selectorStage === "string") {
+    return error;
+  }
+  const staged = new Error(error instanceof Error ? error.message : String(error || "Selector operation failed."));
+  staged.name = "SmartShotSelectorError";
+  staged.selectorStage = stage;
+  return staged;
+}
+
+function selectorFailureCategory(error) {
+  const detail = error instanceof Error ? error.message : String(error || "");
+  if (/(permission|denied|not allowed|cannot access|missing host permission)/i.test(detail)) {
+    return "permission";
+  }
+  if (/(receiving end|connection|message port|no tab)/i.test(detail)) return "receiver-unavailable";
+  if (/invalid selector response/i.test(detail)) return "invalid-response";
+  if (/requested state/i.test(detail)) return "state-mismatch";
+  return "operation-failed";
+}
+
+function logSelectorDiagnostic(error, tabId, fallbackStage = "action") {
+  const diagnostic = {
+    stage: error && typeof error.selectorStage === "string" ? error.selectorStage : fallbackStage,
+    tabId: typeof tabId === "number" ? tabId : null,
+    category: selectorFailureCategory(error)
+  };
+  console.error("SmartShot selector diagnostic:", JSON.stringify(diagnostic));
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function sendSelectorCommand(tabId, action, expectedActive) {
+  const message = selectorCommand(action);
+  const response = await invoke(extensionApi.tabs, "sendMessage", [tabId, message]);
+  if (!isSelectorState(response, message)) {
+    throw new Error("SmartShot received an invalid selector response.");
+  }
+  if (typeof expectedActive === "boolean" && response.payload.active !== expectedActive) {
+    throw new Error("SmartShot selector did not reach the requested state.");
+  }
+  return response;
+}
+
+async function waitForInjectedSelector(tabId, desiredActive) {
+  const action = desiredActive ? "start" : "stop";
+  let lastError;
   try {
-    return await invoke(extensionApi.tabs, "sendMessage", [tab.id, message]);
-  } catch (initialError) {
-    if (!canInjectIntoTab(tab) || !extensionApi.scripting ||
-        typeof extensionApi.scripting.executeScript !== "function") {
-      throw initialError;
+    return await sendSelectorCommand(tabId, action, desiredActive);
+  } catch (error) {
+    lastError = error;
+  }
+
+  for (const retryDelay of SELECTOR_READY_RETRY_DELAYS_MS) {
+    await delay(retryDelay);
+    try {
+      const state = await sendSelectorCommand(tabId, "status");
+      if (state.payload.active === desiredActive) return state;
+      return await sendSelectorCommand(tabId, action, desiredActive);
+    } catch (error) {
+      lastError = error;
     }
-    await invoke(extensionApi.scripting, "executeScript", [{
+  }
+  throw selectorStageError("ready", lastError);
+}
+
+function isLegacySelectorState(response, request) {
+  return Core.isEnvelope(response, "selection.state") &&
+    response.requestId === request.requestId &&
+    typeof response.payload.active === "boolean";
+}
+
+async function reinstallSelector(tab, desiredActive, initialError) {
+  if (!canInjectIntoTab(tab) || !extensionApi.scripting ||
+      typeof extensionApi.scripting.executeScript !== "function") {
+    throw initialError;
+  }
+
+  const legacyStop = Core.makeEnvelope("selection.stop", {});
+  try {
+    await invoke(extensionApi.tabs, "sendMessage", [tab.id, legacyStop]);
+  } catch (_error) {
+    // No previous receiver is the normal first-run path.
+  }
+
+  let injectionResults;
+  try {
+    injectionResults = await invoke(extensionApi.scripting, "executeScript", [{
       target: { tabId: tab.id, allFrames: false },
       files: CONTENT_SCRIPT_FILES
     }]);
-    return invoke(extensionApi.tabs, "sendMessage", [tab.id, message]);
+  } catch (error) {
+    throw selectorStageError("inject", error);
   }
+  if (Array.isArray(injectionResults) && injectionResults.some((result) => result && result.error)) {
+    throw selectorStageError("inject", new Error("SmartShot selector script evaluation failed."));
+  }
+  return waitForInjectedSelector(tab.id, desiredActive);
+}
+
+async function toggleSelectionInTab(tab) {
+  let currentState;
+  try {
+    currentState = await sendSelectorCommand(tab.id, "status");
+  } catch (probeError) {
+    if (!canInjectIntoTab(tab) || !extensionApi.scripting ||
+        typeof extensionApi.scripting.executeScript !== "function") {
+      throw selectorStageError("probe", probeError);
+    }
+    let desiredActive = true;
+    let currentToggleWasHandled = false;
+    const currentToggle = selectorCommand("toggle");
+    try {
+      const response = await invoke(extensionApi.tabs, "sendMessage", [tab.id, currentToggle]);
+      currentToggleWasHandled = response !== undefined;
+      if (isSelectorState(response, currentToggle)) {
+        desiredActive = response.payload.active;
+      }
+    } catch (_error) {
+      // A missing current receiver may still be a pre-0.2.1 selector.
+    }
+    if (!currentToggleWasHandled && SELECTOR_PROTOCOL_VERSION > 1) {
+      const previousToggle = Core.makeEnvelope("selection.command", {
+        action: "toggle",
+        selectorProtocolVersion: SELECTOR_PROTOCOL_VERSION - 1
+      });
+      try {
+        const response = await invoke(extensionApi.tabs, "sendMessage", [tab.id, previousToggle]);
+        currentToggleWasHandled = response !== undefined;
+        if (isSelectorState(response, previousToggle, SELECTOR_PROTOCOL_VERSION - 1)) {
+          desiredActive = response.payload.active;
+        }
+      } catch (_error) {
+        // A pre-versioned selector may still support the legacy message type.
+      }
+    }
+    if (!currentToggleWasHandled) {
+      const legacyToggle = Core.makeEnvelope("selection.toggle", {});
+      try {
+        const response = await invoke(extensionApi.tabs, "sendMessage", [tab.id, legacyToggle]);
+        if (isLegacySelectorState(response, legacyToggle)) {
+          desiredActive = response.payload.active;
+        }
+      } catch (_error) {
+        // A missing legacy receiver means this action should start selection.
+      }
+    }
+    return reinstallSelector(tab, desiredActive, selectorStageError("probe", probeError));
+  }
+
+  const desiredActive = currentState.payload.capturing ? false : !currentState.payload.active;
+  try {
+    return await sendSelectorCommand(tab.id, desiredActive ? "start" : "stop", desiredActive);
+  } catch (commandError) {
+    // Explicit start/stop is idempotent, so it is safe to restore and retry.
+    return reinstallSelector(tab, desiredActive, selectorStageError("command", commandError));
+  }
+}
+
+function isSelectorState(response, request, expectedVersion = SELECTOR_PROTOCOL_VERSION) {
+  return Core.isEnvelope(response, "selection.state") &&
+    response.requestId === request.requestId &&
+    response.payload.selectorProtocolVersion === expectedVersion &&
+    typeof response.payload.active === "boolean" &&
+    (expectedVersion < 3 || typeof response.payload.capturing === "boolean");
+}
+
+function queueSelectionToggle(tab) {
+  const previous = selectorActionQueues.get(tab.id) || Promise.resolve();
+  const queued = previous.catch(() => {}).then(() => toggleSelectionInTab(tab));
+  selectorActionQueues.set(tab.id, queued);
+  return queued.finally(() => {
+    if (selectorActionQueues.get(tab.id) === queued) selectorActionQueues.delete(tab.id);
+  });
 }
 
 function actionFailureMessage(tab, error) {
@@ -417,33 +635,43 @@ function actionFailureMessage(tab, error) {
   return "SmartShot could not start on this page.";
 }
 
+function actionFeedbackTask(method, details) {
+  try {
+    return invoke(extensionApi.action, method, [details]);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
 async function setActionFeedback(tabId, failureMessage = null) {
   if (!extensionApi.action) return;
   const details = { tabId };
   const tasks = [];
   if (typeof extensionApi.action.setBadgeText === "function") {
-    tasks.push(invoke(extensionApi.action, "setBadgeText", [{ ...details, text: failureMessage ? "!" : "" }]));
+    tasks.push(actionFeedbackTask("setBadgeText", { ...details, text: failureMessage ? "!" : "" }));
   }
   if (failureMessage && typeof extensionApi.action.setBadgeBackgroundColor === "function") {
-    tasks.push(invoke(extensionApi.action, "setBadgeBackgroundColor", [{ ...details, color: "#a3132f" }]));
+    tasks.push(actionFeedbackTask("setBadgeBackgroundColor", { ...details, color: "#a3132f" }));
   }
   if (typeof extensionApi.action.setTitle === "function") {
-    tasks.push(invoke(extensionApi.action, "setTitle", [{
+    tasks.push(actionFeedbackTask("setTitle", {
       ...details,
       title: failureMessage || ACTION_DEFAULT_TITLE
-    }]));
+    }));
   }
-  await Promise.allSettled(tasks);
+  const results = await Promise.allSettled(tasks);
+  const rejected = results.find((result) => result.status === "rejected");
+  if (rejected) logSelectorDiagnostic(selectorStageError("feedback", rejected.reason), tabId);
 }
 
 extensionApi.action.onClicked.addListener(async (tab) => {
   if (!tab || typeof tab.id !== "number") return;
-  const message = Core.makeEnvelope("selection.toggle", {});
 
   try {
-    await toggleSelectionInTab(tab, message);
+    await queueSelectionToggle(tab);
     await setActionFeedback(tab.id);
   } catch (error) {
+    logSelectorDiagnostic(error, tab.id);
     await setActionFeedback(tab.id, actionFailureMessage(tab, error));
   }
 });

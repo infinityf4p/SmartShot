@@ -11,6 +11,7 @@
 
   const PROTOCOL = "com.infinityf4p.smartshot";
   const VERSION = 1;
+  const SELECTOR_PROTOCOL_VERSION = 3;
   const NATIVE_HOSTS = Object.freeze({
     chromium: "com.infinityf4p.smartshot",
     safari: "com.infinityf4p.SmartShot"
@@ -303,6 +304,7 @@
   return Object.freeze({
     PROTOCOL,
     VERSION,
+    SELECTOR_PROTOCOL_VERSION,
     NATIVE_HOSTS,
     CAPTURE_LIMITS,
     normalizeRect,

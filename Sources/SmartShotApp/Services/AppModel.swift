@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SmartShotCore
 import Foundation
 import UniformTypeIdentifiers
@@ -32,7 +33,9 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
     @Published private(set) var state: CaptureState = .idle
     @Published private(set) var latestCapture: CapturedImage?
     @Published private(set) var latestRecording: RecordingArtifact?
-    @Published private(set) var captureEditor: CaptureEditorModel?
+    @Published private(set) var captureEditor: CaptureEditorModel? {
+        didSet { observeCaptureEditor() }
+    }
     @Published private(set) var scrollingCaptureProgress: Double?
     @Published private(set) var manualScrollingCaptureProgress: ManualScrollingCaptureProgress?
     @Published private(set) var shortcutRegistration: GlobalShortcutMonitor.Registration = .inactive
@@ -180,6 +183,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
     private var activeRecordingRect: CGRect?
     private var manualScrollingControl: ManualScrollingCaptureControl?
     private var pinnedCaptures: [PinnedCaptureWindowController] = []
+    private var captureEditorChanges: AnyCancellable?
     private var terminationTask: Task<Void, Never>?
     private var isTerminationPending = false
     private var openMainWindow: (() -> Void)?
@@ -286,6 +290,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         }
         scheduleDebugCaptureIfRequested()
 #endif
+        observeCaptureEditor()
     }
 
     var isBusy: Bool {
@@ -1024,6 +1029,12 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
                 captureHistorySearchTask = nil
                 captureHistorySearchTaskID = nil
             }
+        }
+    }
+
+    private func observeCaptureEditor() {
+        captureEditorChanges = captureEditor?.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
         }
     }
 

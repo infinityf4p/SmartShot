@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SmartShot Web Selector",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtq5WbE6Fhkv/dsj+Ih8HoMsyVE6/s+MSofNmGZF2Ihe3ODAyG00Si4IBGXKCaRehvPSWS/mFBuccvwwTkn8RXr10mpsU2CA55Mg+HJ8fB6PQxM/stvaPlAHW37mU+tle5JH5n8x/xATI/l+dlIYA9RE532/6cTcef11xd0fKeTbOj8Z8uRyO1e0ur5feEr/bWaG3qMrkQrcxZrWgZGRVk5bgGwENtjwP48pt+I8Bttc0NQsQBZfQKNb4WyHSnq3Mg5tdHHH/Z6IGRuSfpd5krpAwoaGnBh97Elk+xoaay+hOpbiOmvSjowD/kEQx6at5lPj45+S9iRc9mFdB38hNoQIDAQAB",
   "description": "Select semantic web content blocks and capture them locally with SmartShot.",
   "icons": {
@@ -14,6 +14,14 @@
     "default_icon": {
       "16": "icons/icon_16.png",
       "32": "icons/icon_32.png"
+    }
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+9",
+        "mac": "MacCtrl+Shift+9"
+      }
     }
   },
   "background": {

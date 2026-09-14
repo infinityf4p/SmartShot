@@ -203,6 +203,6 @@ Recording is limited to one display or a region on one display. GIF export is de
 
 ## Acceptance Boundary
 
-The native capture/editor/history/OCR/automation, browser bridge, and screen-recording workflow may be described as implemented in code. The current automated record is **199/199 Swift/XCTest** and **67/67 browser Node** tests; its exact scope is in [TEST_PLAN.md](TEST_PLAN.md). Narrow recorded GUI evidence now covers the controlled automatic AX fixture, installed Smart/Region/Manual Long captures, overlay Escape, a basic editor/output/private subset, installed CLI delivery, and one region/video-only recording plus Save As/GIF export.
+The native capture/editor/history/OCR/automation, browser bridge, and screen-recording workflow may be described as implemented in code. The current automated record is **199/199 native Swift** and **93/93 browser Node** tests; its exact scope is in [TEST_PLAN.md](TEST_PLAN.md). Narrow recorded GUI evidence now covers the controlled automatic AX fixture, installed Smart/Region/Manual Long captures, overlay Escape, a basic editor/output/private subset, installed CLI delivery, and one region/video-only recording plus Save As/GIF export.
 
 Do not call Chrome/Safari + X, the complete CLI/URL failure/full-screen matrix, expanded OCR/editor/history workflows, audio/current-display recording, or the general native display/permission matrix GUI-verified until their test records exist.
