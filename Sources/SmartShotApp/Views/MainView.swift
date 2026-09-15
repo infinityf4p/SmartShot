@@ -319,15 +319,21 @@ struct MainView: View {
                 Label("Copy", systemImage: "doc.on.doc")
             }
             .help("Copy the screenshot")
-            Button(action: model.quickSaveLatest) {
-                Label("Quick Save", systemImage: "bolt")
+            ControlGroup {
+                Button(action: model.quickSaveLatest) {
+                    Label("Save", systemImage: "square.and.arrow.down")
+                        .labelStyle(.titleAndIcon)
+                }
+                .help("Quick Save: Save immediately to the Quick Save folder")
+                Button(action: model.saveLatest) {
+                    Image(systemName: "chevron.down")
+                        .frame(width: 12)
+                }
+                .help("Save with options: Choose a filename and location")
+                .accessibilityLabel("Save with options")
             }
-            .help("Save immediately to the Quick Save folder")
-            Button(action: model.saveLatest) {
-                Label("Save", systemImage: "square.and.arrow.down")
-            }
+            .controlGroupStyle(.navigation)
             .buttonStyle(.borderedProminent)
-            .help("Save with options")
         }
         .fixedSize()
     }
