@@ -8,7 +8,7 @@ SmartShot 将智能选区、区域截图、长截图、图片编辑、本地 OCR
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-macOS 14+ · Swift 6 · 预览版本 0.2.2
+macOS 14+ · Swift 6 · 预览版本 0.2.3
 
 ## 功能
 
@@ -25,12 +25,12 @@ macOS 14+ · Swift 6 · 预览版本 0.2.2
 
 ## 下载
 
-[SmartShot 0.2.2 预览版](https://github.com/infinityf4p/SmartShot/releases/tag/v0.2.2) 提供同时包含 Apple Silicon 和 Intel 架构的通用应用。
+[SmartShot 0.2.3 预览版](https://github.com/infinityf4p/SmartShot/releases/tag/v0.2.3) 提供同时包含 Apple Silicon 和 Intel 架构的通用应用。
 
-- [macOS DMG](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SmartShot-0.2.2-universal.dmg)
-- [macOS ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SmartShot-0.2.2-universal.zip)
-- [浏览器扩展 ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SmartShot-Web-Selector-0.2.2.zip)
-- [SHA-256 校验文件](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SHA256SUMS.txt)
+- [macOS DMG](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-0.2.3-universal.dmg)
+- [macOS ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-0.2.3-universal.zip)
+- [浏览器扩展 ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-Web-Selector-0.2.3.zip)
+- [SHA-256 校验文件](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SHA256SUMS.txt)
 
 该预览版使用 ad-hoc 签名，没有 Developer ID 证书或 Apple 公证。macOS 可能会阻止下载的应用，需要你在 Finder 或“隐私与安全性”中明确允许打开。安装包不含 `get-task-allow` 调试权限；Safari 开发启用条件及下方待验收范围仍然适用。
 
@@ -39,7 +39,7 @@ macOS 14+ · Swift 6 · 预览版本 0.2.2
 1. 下载 DMG 或 ZIP，将 `SmartShot.app` 放入 `/Applications` 后启动；也可以按下方说明从源码构建。
 2. 截图与录屏需要 **屏幕录制** 权限。**辅助功能** 权限用于智能内容块选择；没有该权限时仍可手动框选。麦克风权限独立且可选。
 3. 点击 **Capture**，或使用应用中显示的快捷键。选择 **Smart**、**Region**、**Long** 或 **App Scroll**，按 Escape 取消。
-4. 编辑截图后选择 Copy、Pin、Save 或 Quick Save。录屏入口为 **More > Record Region** 或 **Record Current Display**；Stop 保存 MP4，Cancel 丢弃本次录制。
+4. 编辑截图后选择 Copy、Pin 或 Save。**Save** 直接保存到配置的文件夹，右侧箭头打开保存弹窗；关闭按钮返回初始界面。录屏入口为 **More > Record Region** 或 **Record Current Display**；Stop 保存 MP4，Cancel 丢弃本次录制。
 
 原生截图的初始快捷键为 `Control-Shift-2`。如果与其他应用冲突，以 SmartShot 显示的快捷键为准，也可以在 Settings 中修改。
 

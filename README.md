@@ -8,7 +8,7 @@ SmartShot combines smart block selection, region and long screenshots, an image 
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-macOS 14+ · Swift 6 · Preview version 0.2.2
+macOS 14+ · Swift 6 · Preview version 0.2.3
 
 ## Features
 
@@ -25,12 +25,12 @@ macOS 14+ · Swift 6 · Preview version 0.2.2
 
 ## Download
 
-[SmartShot 0.2.2 Preview](https://github.com/infinityf4p/SmartShot/releases/tag/v0.2.2) supports Apple Silicon and Intel Macs in one universal application.
+[SmartShot 0.2.3 Preview](https://github.com/infinityf4p/SmartShot/releases/tag/v0.2.3) supports Apple Silicon and Intel Macs in one universal application.
 
-- [macOS DMG](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SmartShot-0.2.2-universal.dmg)
-- [macOS ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SmartShot-0.2.2-universal.zip)
-- [Browser extension ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SmartShot-Web-Selector-0.2.2.zip)
-- [SHA-256 checksums](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.2/SHA256SUMS.txt)
+- [macOS DMG](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-0.2.3-universal.dmg)
+- [macOS ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-0.2.3-universal.zip)
+- [Browser extension ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-Web-Selector-0.2.3.zip)
+- [SHA-256 checksums](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SHA256SUMS.txt)
 
 This preview is ad-hoc signed, without a Developer ID certificate or Apple notarization. macOS may block a downloaded copy until you explicitly approve it in Finder or Privacy & Security. The packaged app has no `get-task-allow` debugging entitlement. Safari development enablement and the pending acceptance cases below still apply.
 
@@ -39,7 +39,7 @@ This preview is ad-hoc signed, without a Developer ID certificate or Apple notar
 1. Download the DMG or ZIP, place `SmartShot.app` in `/Applications`, and launch it. Alternatively, build from source below.
 2. Allow **Screen Recording** for screenshots and video. **Accessibility** enables smart content-block selection; manual regions remain available without it. Microphone access is separate and optional.
 3. Use **Capture** or the shortcut displayed in the app. Choose **Smart**, **Region**, **Long**, or **App Scroll**; press Escape to cancel.
-4. Edit the result, then Copy, Pin, Save, or Quick Save. For video, choose **More > Record Region** or **Record Current Display**. Stop saves an MP4; Cancel discards the recording.
+4. Edit the result, then Copy, Pin, or Save. **Save** writes directly to the configured folder; its adjacent arrow opens the save dialog. Use the close button to return to the initial view. For video, choose **More > Record Region** or **Record Current Display**. Stop saves an MP4; Cancel discards the recording.
 
 The initial native shortcut is `Control-Shift-2`. If it conflicts with another app, use the shortcut shown in SmartShot or change it in Settings.
 
