@@ -1667,6 +1667,20 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         return .terminateLater
     }
 
+    func closeLatestCapture() {
+        guard !isBusy, !isTerminationPending, latestCapture != nil, latestRecording == nil else { return }
+        cancelPendingHistorySelection()
+        latestCapture = nil
+        captureEditor = nil
+        selectedHistoryID = nil
+        currentCaptureHistoryID = nil
+        currentCaptureCreatedAt = nil
+        currentCaptureHistorySearchIndex = .none
+        latestSmartShotPasteboardChangeCount = nil
+        lastOutputStatus = nil
+        state = .idle
+    }
+
     func copyLatest() {
         do {
             guard let capture = try captureForOutput() else { return }

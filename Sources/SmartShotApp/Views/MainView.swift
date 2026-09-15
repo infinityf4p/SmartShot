@@ -5,6 +5,7 @@ import SwiftUI
 struct MainView: View {
     @ObservedObject var model: AppModel
     @Environment(\.openWindow) private var openWindow
+    @State private var capturePendingClose: CaptureEditorModel?
 
     var body: some View {
         HSplitView {
@@ -231,45 +232,25 @@ struct MainView: View {
 
                     Divider()
 
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(capture.label)
-                                .font(.subheadline.weight(.medium))
-                                .lineLimit(1)
-                            Text("\(Int(previewSize.width)) x \(Int(previewSize.height)) points")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if let status = model.lastOutputStatus {
-                                Text(status)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) {
+                            captureDetails(capture)
+                            Spacer(minLength: 10)
+                            flattenCaptureButton
+                            captureOutputButtons
+                            closeCaptureButton
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 10) {
+                                captureDetails(capture)
+                                Spacer(minLength: 10)
+                                flattenCaptureButton
+                                closeCaptureButton
                             }
+                            captureOutputButtons
+                                .frame(maxWidth: .infinity, alignment: .trailing)
                         }
-                        Spacer()
-                        if let editor = model.captureEditor, editor.hasEdits {
-                            Button(action: model.flattenLatestEdits) {
-                                Label("Flatten", systemImage: "square.stack.3d.down.forward")
-                            }
-                            .help("Replace the original and history copy with the rendered edits")
-                        }
-                        Button(action: model.pinLatest) {
-                            Label("Pin", systemImage: "pin")
-                        }
-                        .help("Keep the screenshot above other windows")
-                        Button(action: model.copyLatest) {
-                            Label("Copy", systemImage: "doc.on.doc")
-                        }
-                        .help("Copy the screenshot")
-                        Button(action: model.quickSaveLatest) {
-                            Image(systemName: "bolt")
-                        }
-                        .help("Quick Save")
-                        Button(action: model.saveLatest) {
-                            Label("Save", systemImage: "square.and.arrow.down")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .help("Save with options")
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 14)
@@ -297,6 +278,96 @@ struct MainView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func captureDetails(_ capture: CapturedImage) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(capture.label)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+            Text("\(Int(previewSize.width)) x \(Int(previewSize.height)) points")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let status = model.lastOutputStatus {
+                Text(status)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var flattenCaptureButton: some View {
+        if let editor = model.captureEditor, editor.hasEdits {
+            Button(action: model.flattenLatestEdits) {
+                Label("Flatten", systemImage: "square.stack.3d.down.forward")
+            }
+            .fixedSize()
+            .help("Replace the original and history copy with the rendered edits")
+        }
+    }
+
+    private var captureOutputButtons: some View {
+        HStack(spacing: 10) {
+            Button(action: model.pinLatest) {
+                Label("Pin", systemImage: "pin")
+            }
+            .help("Keep the screenshot above other windows")
+            Button(action: model.copyLatest) {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            .help("Copy the screenshot")
+            ControlGroup {
+                Button(action: model.quickSaveLatest) {
+                    Label("Save", systemImage: "square.and.arrow.down")
+                        .labelStyle(.titleAndIcon)
+                }
+                .help("Quick Save: Save immediately to the Quick Save folder")
+                Button(action: model.saveLatest) {
+                    Image(systemName: "chevron.down")
+                        .frame(width: 12)
+                }
+                .help("Save with options: Choose a filename and location")
+                .accessibilityLabel("Save with options")
+            }
+            .controlGroupStyle(.navigation)
+            .buttonStyle(.borderedProminent)
+        }
+        .fixedSize()
+    }
+
+    private var closeCaptureButton: some View {
+        Button {
+            if let editor = model.captureEditor, editor.hasEdits {
+                capturePendingClose = editor
+            } else {
+                model.closeLatestCapture()
+            }
+        } label: {
+            Image(systemName: "xmark")
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.borderless)
+        .disabled(model.isBusy)
+        .help("Close screenshot")
+        .accessibilityLabel("Close screenshot")
+        .confirmationDialog(
+            "Close screenshot?",
+            isPresented: Binding(
+                get: { capturePendingClose != nil },
+                set: { if !$0 { capturePendingClose = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: capturePendingClose
+        ) { editor in
+            Button("Close Screenshot", role: .destructive) {
+                guard model.captureEditor === editor else { return }
+                model.closeLatestCapture()
+            }
+        } message: { _ in
+            Text("Edits in this preview will be discarded. Saved files and history will be kept.")
         }
     }
 
