@@ -144,6 +144,7 @@ targets:
       - path: Sources/SmartShotBrowserBridge
       - path: Sources/SmartShotCommand
       - path: Sources/SmartShotApp/Services/GlobalShortcutMonitor.swift
+      - path: Sources/SmartShotApp/Services/LaunchAtLoginService.swift
       - path: Sources/SmartShotApp/Services/CaptureOcclusionPolicy.swift
       - path: Sources/SmartShotApp/Services/CaptureHistoryStore.swift
       - path: Sources/SmartShotApp/Services/CapturePostProcessingPolicy.swift

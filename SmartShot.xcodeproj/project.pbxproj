@@ -42,11 +42,13 @@
 		340CB1D01A3D3BE79BC2323E /* ScreenshotEditModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94626524A65118F5D2B9A73E /* ScreenshotEditModels.swift */; };
 		34D03184EF5F685C3A3E402A /* SmartShotCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8821BA70E20ECBBF65558CE7 /* SmartShotCommand.swift */; };
 		354AADCCA3D3B1B05450A6D7 /* ManualScrollingCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3AA9AC6FE1D5C104BB2036A /* ManualScrollingCaptureService.swift */; };
+		38C03005C35F4F62BA4C5D18 /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7C0C7AB0F44F349087BD14 /* LaunchAtLoginService.swift */; };
 		3A2DC8F7D095AAF08030D3E7 /* ScrollingSelectionCommitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8324E64BE1F17B2241B8C57E /* ScrollingSelectionCommitTests.swift */; };
 		3DDC5CD067271069FD49D9C1 /* ChromiumNativeMessagingInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = DED15F688F0CE914AF2C3DEF /* ChromiumNativeMessagingInstaller.swift */; };
 		41907063361BFC52F01ABD75 /* SmartShotCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18175DECC5D11EF0CE72B293 /* SmartShotCore.framework */; };
 		423FDD0EA83D7BAA023982A5 /* VerticalFixedTopDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0623917B5A8CE003B20C4A /* VerticalFixedTopDetector.swift */; };
 		43E733233A86C8892A5493DC /* CaptureSelectionMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9558C2DEF37E9FCE8BBDCB6D /* CaptureSelectionMode.swift */; };
+		450EDB4324B249FDB64352E6 /* LaunchAtLoginServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55F8F17AB194E0C9593D579 /* LaunchAtLoginServiceTests.swift */; };
 		46262E64F75CFE3E0F8C3D4E /* GlobalShortcutMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE6E4A6524C48C2A9FCF7CE /* GlobalShortcutMonitor.swift */; };
 		47B128D16C737DFE83235DF1 /* ManualScrollingCaptureHUDController.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED0C8042CF997598A899382F /* ManualScrollingCaptureHUDController.swift */; };
 		48B567130F53E77731D289E9 /* SafariServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 477080643BA270C25E4016DF /* SafariServices.framework */; };
@@ -109,6 +111,7 @@
 		A7BF3781FC036460A4DBEA43 /* GIFExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F0CD95ABEA90A13C97C1497 /* GIFExportService.swift */; };
 		A821F1967B9C2C8C69979536 /* GIFExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F0CD95ABEA90A13C97C1497 /* GIFExportService.swift */; };
 		A924ADA66CD3BD51B03F4CD2 /* CaptureHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47FF8D48B4783D16FD4470B /* CaptureHistoryStore.swift */; };
+		AF72B054931E455B9D684872 /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7C0C7AB0F44F349087BD14 /* LaunchAtLoginService.swift */; };
 		B07415302C8A82C7082A1201 /* CaptureCountdownHUDController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D220777E15B49CCDEA702A97 /* CaptureCountdownHUDController.swift */; };
 		B1DD655B30A3FDF01251C34A /* ChromiumNativeMessagingInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = DED15F688F0CE914AF2C3DEF /* ChromiumNativeMessagingInstaller.swift */; };
 		B24E09DCAB1187244B937267 /* AppSymbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84A9373163DC56CFDC22A21E /* AppSymbols.swift */; };
@@ -261,6 +264,7 @@
 		755C90E04B6F3E281F81C132 /* RecordingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingModels.swift; sourceTree = "<group>"; };
 		78C40E7F70A980CA3B95D510 /* ShortcutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorder.swift; sourceTree = "<group>"; };
 		7A56F5C89B6E00325E91AE1E /* RecordingModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingModelsTests.swift; sourceTree = "<group>"; };
+		7A7C0C7AB0F44F349087BD14 /* LaunchAtLoginService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginService.swift; sourceTree = "<group>"; };
 		7BF29E310093640FC2A517D8 /* AccessibilityScrollCaptureTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityScrollCaptureTarget.swift; sourceTree = "<group>"; };
 		7C4CCE0BA9AD6F643FB00F9E /* RecordingSourceResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSourceResolverTests.swift; sourceTree = "<group>"; };
 		7EE4C1EC4B1C8AB71098DAD9 /* CapturePostProcessingPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturePostProcessingPolicy.swift; sourceTree = "<group>"; };
@@ -277,6 +281,7 @@
 		9BE37494B6EA934DB314BBA2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		9CE9A04EA11C4CEB68BCE6B4 /* AccessibilityPermissionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPermissionController.swift; sourceTree = "<group>"; };
 		9EC8EAD1F3BB8361969D6F31 /* ScrollingCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollingCaptureService.swift; sourceTree = "<group>"; };
+		A55F8F17AB194E0C9593D579 /* LaunchAtLoginServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginServiceTests.swift; sourceTree = "<group>"; };
 		A6A284480FFB0B6DB4F2FCEA /* ScrollingSelectionCommit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollingSelectionCommit.swift; sourceTree = "<group>"; };
 		A96F96D12A250AED8EDCACA5 /* RecordingSampleRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSampleRouter.swift; sourceTree = "<group>"; };
 		AE1C98CC624B63F89F67D5D9 /* MicrophoneCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneCaptureService.swift; sourceTree = "<group>"; };
@@ -524,6 +529,7 @@
 				3B43E4C77BA69DD5FAEE70CD /* CaptureSelectionModeTests.swift */,
 				E8BCD5A45ED4DBFDFB039CB8 /* ChromiumNativeMessagingInstallerTests.swift */,
 				55FC93BEC6D519EDE24C0D53 /* GlobalShortcutMonitorTests.swift */,
+				A55F8F17AB194E0C9593D579 /* LaunchAtLoginServiceTests.swift */,
 				F0047A105BD5F7B195B0B7CF /* ManualScrollAttemptTrackerTests.swift */,
 				E14DE3242222A1C4B7541E5F /* PermissionServiceTests.swift */,
 				F01B63B6C8D95FE72E1DAB4B /* RecordingAssetWriterTests.swift */,
@@ -692,6 +698,7 @@
 				7EE4C1EC4B1C8AB71098DAD9 /* CapturePostProcessingPolicy.swift */,
 				DED15F688F0CE914AF2C3DEF /* ChromiumNativeMessagingInstaller.swift */,
 				3EE6E4A6524C48C2A9FCF7CE /* GlobalShortcutMonitor.swift */,
+				7A7C0C7AB0F44F349087BD14 /* LaunchAtLoginService.swift */,
 				ECE1571F180037283C8EE5E6 /* ManualScrollAttemptTracker.swift */,
 				D3AA9AC6FE1D5C104BB2036A /* ManualScrollingCaptureService.swift */,
 				5D9FA6C65767A1198E631FD2 /* PermissionService.swift */,
@@ -990,6 +997,7 @@
 				F7DAC2D01CDAE810ABC38173 /* DebugCaptureFixture.swift in Sources */,
 				A7BF3781FC036460A4DBEA43 /* GIFExportService.swift in Sources */,
 				46262E64F75CFE3E0F8C3D4E /* GlobalShortcutMonitor.swift in Sources */,
+				38C03005C35F4F62BA4C5D18 /* LaunchAtLoginService.swift in Sources */,
 				94592C9630DC5F8564D58AB2 /* MainView.swift in Sources */,
 				986BA27DFFDF885F460A4E6F /* ManualScrollAttemptTracker.swift in Sources */,
 				47B128D16C737DFE83235DF1 /* ManualScrollingCaptureHUDController.swift in Sources */,
@@ -1061,6 +1069,8 @@
 				A821F1967B9C2C8C69979536 /* GIFExportService.swift in Sources */,
 				69F5AB89815FD7C22BC204D4 /* GlobalShortcutMonitor.swift in Sources */,
 				711D287F202392DDFE1762E7 /* GlobalShortcutMonitorTests.swift in Sources */,
+				AF72B054931E455B9D684872 /* LaunchAtLoginService.swift in Sources */,
+				450EDB4324B249FDB64352E6 /* LaunchAtLoginServiceTests.swift in Sources */,
 				1AB50A2435621DF8CB65187F /* ManualScrollAttemptTracker.swift in Sources */,
 				53ABBE01BB4E3693911C4984 /* ManualScrollAttemptTrackerTests.swift in Sources */,
 				2C3575A025EED539E7FA4BD4 /* MicrophoneCaptureService.swift in Sources */,

@@ -1,12 +1,49 @@
+import AppKit
 import SmartShotCore
 import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var model: AppModel
+    @StateObject private var launchAtLogin = LaunchAtLoginService()
     @State private var confirmsHistoryDeletion = false
 
     var body: some View {
         Form {
+            Section("General") {
+                Toggle(
+                    "Launch SmartShot at login",
+                    isOn: Binding(
+                        get: { launchAtLogin.isEnabled },
+                        set: { launchAtLogin.setEnabled($0) }
+                    )
+                )
+                Text("Automatically start SmartShot when you log in to your Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if launchAtLogin.requiresApproval {
+                    Text("Allow SmartShot in System Settings > General > Login Items to enable launch at login.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Open Login Items", action: launchAtLogin.openSystemSettings)
+                }
+
+                if launchAtLogin.isUnavailable {
+                    Text("Launch at login is unavailable. Move SmartShot to Applications and reopen it, then try again.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let errorMessage = launchAtLogin.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             Section("Capture Shortcut") {
                 LabeledContent("Global shortcut") {
                     HStack(spacing: 8) {
@@ -209,7 +246,11 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 600, height: 820)
         .onAppear {
+            launchAtLogin.refreshStatus()
             model.refreshSafariExtensionStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            launchAtLogin.refreshStatus()
         }
         .onDisappear {
             model.endShortcutRecording()
