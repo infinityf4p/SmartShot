@@ -10,10 +10,11 @@ struct MainView: View {
     var body: some View {
         HSplitView {
             sidebar
-                .frame(minWidth: 224, idealWidth: 240, maxWidth: 272)
+                .frame(minWidth: 224, idealWidth: 240, maxWidth: 272, maxHeight: .infinity)
             preview
-                .frame(minWidth: 460)
+                .frame(minWidth: 460, maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {

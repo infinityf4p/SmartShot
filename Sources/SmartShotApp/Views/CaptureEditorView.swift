@@ -58,7 +58,7 @@ struct CaptureEditorView: View {
                     ScrollView(.horizontal) {
                         toolbarContents
                     }
-                    .scrollIndicators(.visible)
+                    .scrollIndicators(.never)
                     .coordinateSpace(name: "editorToolbar")
                     .frame(width: viewportWidth)
                     .onPreferenceChange(ToolbarItemFramesKey.self) { toolbarItemFrames = $0 }
@@ -86,7 +86,7 @@ struct CaptureEditorView: View {
         return Button {
             guard let target else { return }
             withAnimation(.easeInOut(duration: 0.2)) {
-                proxy.scrollTo(target, anchor: forward ? .leading : .trailing)
+                proxy.scrollTo(target, anchor: forward ? .trailing : .leading)
             }
         } label: {
             Image(systemName: forward ? "chevron.right" : "chevron.left")
@@ -144,14 +144,15 @@ struct CaptureEditorView: View {
                     .help(choice.name)
                     .accessibilityLabel(choice.name)
                     .accessibilityAddTraits(editor.selectedColor == choice.value ? .isSelected : [])
+                    .toolbarItem("color-\(choice.name)")
                 }
 
                 Slider(value: $editor.lineWidthPoints, in: 1...12, step: 1)
                     .frame(width: 86)
                     .help("Line width")
                     .accessibilityLabel("Line width")
+                    .toolbarItem("line-width")
             }
-            .toolbarItem("appearance")
 
             if editor.selectedTool == .text {
                 TextField("Text", text: $editor.textDraft)
@@ -174,6 +175,7 @@ struct CaptureEditorView: View {
                 .keyboardShortcut("z", modifiers: .command)
                 .disabled(!editor.canUndo)
                 .help("Undo")
+                .toolbarItem("undo")
 
                 Button(action: editor.redo) {
                     Image(systemName: "arrow.uturn.forward")
@@ -183,6 +185,7 @@ struct CaptureEditorView: View {
                 .keyboardShortcut("z", modifiers: [.command, .shift])
                 .disabled(!editor.canRedo)
                 .help("Redo")
+                .toolbarItem("redo")
 
                 Button(action: editor.deleteSelected) {
                     Image(systemName: "trash")
@@ -192,6 +195,7 @@ struct CaptureEditorView: View {
                 .keyboardShortcut(.delete, modifiers: [])
                 .disabled(!editor.canDeleteSelection)
                 .help("Delete selected annotation")
+                .toolbarItem("delete-annotation")
 
                 if editor.currentCrop != .full {
                     Button(action: editor.resetCrop) {
@@ -200,6 +204,7 @@ struct CaptureEditorView: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Restore full image bounds")
+                    .toolbarItem("restore-crop")
                 }
 
                 Button {
@@ -216,6 +221,7 @@ struct CaptureEditorView: View {
                 .popover(isPresented: $showsTextRecognition, arrowEdge: .bottom) {
                     TextRecognitionPanel(editor: editor)
                 }
+                .toolbarItem("recognize-text")
 
                 Button(action: editor.resetAll) {
                     Image(systemName: "arrow.counterclockwise")
@@ -224,8 +230,8 @@ struct CaptureEditorView: View {
                 .buttonStyle(.borderless)
                 .disabled(!editor.hasEdits)
                 .help("Reset all edits")
+                .toolbarItem("reset-edits")
             }
-            .toolbarItem("edit-actions")
 
             Divider()
                 .frame(height: 22)
@@ -241,11 +247,13 @@ struct CaptureEditorView: View {
                 .buttonStyle(.borderless)
                 .disabled(zoomScale <= 1)
                 .help("Zoom out")
+                .toolbarItem("zoom-out")
 
                 Text("\(Int(zoomScale * 100))%")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 42)
+                    .toolbarItem("zoom-level")
 
                 Button {
                     zoomScale = min(4, zoomScale + 0.5)
@@ -256,14 +264,13 @@ struct CaptureEditorView: View {
                 .buttonStyle(.borderless)
                 .disabled(zoomScale >= 4)
                 .help("Zoom in")
+                .toolbarItem("zoom-in")
             }
-            .toolbarItem("zoom")
         }
         .fixedSize()
         .controlSize(.small)
         .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 16)
+        .padding(.vertical, 12)
     }
 
     private var editorCanvas: some View {
