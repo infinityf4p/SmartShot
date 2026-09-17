@@ -42,17 +42,6 @@ final class LaunchAtLoginService: ObservableObject {
     var isEnabled: Bool { status == .enabled }
     var requiresApproval: Bool { status == .requiresApproval }
 
-    var isUnavailable: Bool {
-        switch status {
-        case .notRegistered, .enabled, .requiresApproval:
-            false
-        case .notFound:
-            true
-        @unknown default:
-            true
-        }
-    }
-
     func refreshStatus() {
         status = loginItem.status
         errorMessage = nil
@@ -68,6 +57,8 @@ final class LaunchAtLoginService: ObservableObject {
         }
         guard enabled != isEnabled else { return }
 
+        // A new app can report .notFound until its first registration.
+        // Let registration determine whether launch at login is available.
         defer { status = loginItem.status }
         do {
             if enabled {

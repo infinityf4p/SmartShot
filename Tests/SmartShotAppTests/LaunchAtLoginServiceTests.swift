@@ -35,6 +35,20 @@ final class LaunchAtLoginServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testCanRegisterANewAppWhenSystemStatusIsNotFound() async {
+        let loginItem = TestLoginItem(status: .notFound)
+        let service = LaunchAtLoginService(loginItem: loginItem)
+
+        XCTAssertFalse(service.isEnabled)
+        XCTAssertNil(service.errorMessage)
+
+        service.setEnabled(true)
+        XCTAssertTrue(service.isEnabled)
+        XCTAssertEqual(loginItem.registerCalls, 1)
+        XCTAssertNil(service.errorMessage)
+    }
+
+    @MainActor
     func testRegistrationFailureKeepsActualStateAndCanBeRetried() async {
         let loginItem = TestLoginItem()
         loginItem.error = TestFailure.denied

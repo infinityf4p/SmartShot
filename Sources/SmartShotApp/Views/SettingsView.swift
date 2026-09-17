@@ -29,13 +29,6 @@ struct SettingsView: View {
                     Button("Open Login Items", action: launchAtLogin.openSystemSettings)
                 }
 
-                if launchAtLogin.isUnavailable {
-                    Text("Launch at login is unavailable. Move SmartShot to Applications and reopen it, then try again.")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
                 if let errorMessage = launchAtLogin.errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
