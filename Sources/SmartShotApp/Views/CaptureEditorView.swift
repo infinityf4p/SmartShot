@@ -147,71 +147,6 @@ struct CaptureEditorView: View {
 
     private var toolbarContents: some View {
         HStack(spacing: 6) {
-            ForEach(ScreenshotEditingTool.allCases, id: \.rawValue) { tool in
-                Button {
-                    editor.selectedTool = tool
-                } label: {
-                    Image(systemName: icon(for: tool))
-                        .frame(width: 20, height: 20)
-                }
-                .buttonStyle(.bordered)
-                .tint(editor.selectedTool == tool ? .accentColor : .secondary)
-                .help(label(for: tool))
-                .accessibilityLabel(label(for: tool))
-                .accessibilityAddTraits(editor.selectedTool == tool ? .isSelected : [])
-                .toolbarItem(tool.rawValue)
-            }
-
-            Divider()
-                .frame(height: 22)
-                .padding(.horizontal, 3)
-
-            HStack(spacing: 6) {
-                ForEach(colorChoices, id: \.name) { choice in
-                    Button {
-                        editor.selectedColor = choice.value
-                    } label: {
-                        Circle()
-                            .fill(swiftUIColor(choice.value))
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        editor.selectedColor == choice.value
-                                            ? Color.accentColor
-                                            : Color.primary.opacity(0.25),
-                                        lineWidth: editor.selectedColor == choice.value ? 3 : 1
-                                    )
-                                    .padding(editor.selectedColor == choice.value ? -3 : 0)
-                            }
-                            .frame(width: 16, height: 16)
-                            .frame(width: 26, height: 26)
-                    }
-                    .buttonStyle(.plain)
-                    .help(choice.name)
-                    .accessibilityLabel(choice.name)
-                    .accessibilityAddTraits(editor.selectedColor == choice.value ? .isSelected : [])
-                    .toolbarItem("color-\(choice.name)")
-                }
-
-                Slider(value: $editor.lineWidthPoints, in: 1...12, step: 1)
-                    .frame(width: 86)
-                    .help("Line width")
-                    .accessibilityLabel("Line width")
-                    .toolbarItem("line-width")
-            }
-
-            if editor.selectedTool == .text {
-                TextField("Text", text: $editor.textDraft)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 128)
-                    .accessibilityLabel("Annotation text")
-                    .toolbarItem("text-entry")
-            }
-
-            Divider()
-                .frame(height: 22)
-                .padding(.horizontal, 3)
-
             HStack(spacing: 6) {
                 Button(action: editor.undo) {
                     Image(systemName: "arrow.uturn.backward")
@@ -277,6 +212,71 @@ struct CaptureEditorView: View {
                 .disabled(!editor.hasEdits)
                 .help("Reset all edits")
                 .toolbarItem("reset-edits")
+            }
+
+            Divider()
+                .frame(height: 22)
+                .padding(.horizontal, 3)
+
+            ForEach(ScreenshotEditingTool.allCases, id: \.rawValue) { tool in
+                Button {
+                    editor.selectedTool = tool
+                } label: {
+                    Image(systemName: icon(for: tool))
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.bordered)
+                .tint(editor.selectedTool == tool ? .accentColor : .secondary)
+                .help(label(for: tool))
+                .accessibilityLabel(label(for: tool))
+                .accessibilityAddTraits(editor.selectedTool == tool ? .isSelected : [])
+                .toolbarItem(tool.rawValue)
+            }
+
+            Divider()
+                .frame(height: 22)
+                .padding(.horizontal, 3)
+
+            HStack(spacing: 6) {
+                ForEach(colorChoices, id: \.name) { choice in
+                    Button {
+                        editor.selectedColor = choice.value
+                    } label: {
+                        Circle()
+                            .fill(swiftUIColor(choice.value))
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        editor.selectedColor == choice.value
+                                            ? Color.accentColor
+                                            : Color.primary.opacity(0.25),
+                                        lineWidth: editor.selectedColor == choice.value ? 3 : 1
+                                    )
+                                    .padding(editor.selectedColor == choice.value ? -3 : 0)
+                            }
+                            .frame(width: 16, height: 16)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .help(choice.name)
+                    .accessibilityLabel(choice.name)
+                    .accessibilityAddTraits(editor.selectedColor == choice.value ? .isSelected : [])
+                    .toolbarItem("color-\(choice.name)")
+                }
+
+                Slider(value: $editor.lineWidthPoints, in: 1...12, step: 1)
+                    .frame(width: 86)
+                    .help("Line width")
+                    .accessibilityLabel("Line width")
+                    .toolbarItem("line-width")
+            }
+
+            if editor.selectedTool == .text {
+                TextField("Text", text: $editor.textDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 128)
+                    .accessibilityLabel("Annotation text")
+                    .toolbarItem("text-entry")
             }
 
             Divider()
