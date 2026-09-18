@@ -8,7 +8,7 @@ SmartShot combines smart block selection, region and long screenshots, an image 
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-macOS 14+ · Swift 6 · Preview version 0.2.3
+macOS 14+ · Swift 6 · Preview releases
 
 ## Features
 
@@ -25,12 +25,12 @@ macOS 14+ · Swift 6 · Preview version 0.2.3
 
 ## Download
 
-[SmartShot 0.2.3 Preview](https://github.com/infinityf4p/SmartShot/releases/tag/v0.2.3) supports Apple Silicon and Intel Macs in one universal application.
+[Download the newest SmartShot Preview](https://github.com/infinityf4p/SmartShot/releases). Each release supports Apple Silicon and Intel Macs in one universal application. Choose its assets below:
 
-- [macOS DMG](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-0.2.3-universal.dmg)
-- [macOS ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-0.2.3-universal.zip)
-- [Browser extension ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-Web-Selector-0.2.3.zip)
-- [SHA-256 checksums](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SHA256SUMS.txt)
+- macOS DMG: `SmartShot-<version>-universal.dmg`
+- macOS ZIP: `SmartShot-<version>-universal.zip`
+- Browser extension ZIP: `SmartShot-Web-Selector-<version>.zip`
+- SHA-256 checksums: `SHA256SUMS.txt`
 
 This preview is ad-hoc signed, without a Developer ID certificate or Apple notarization. macOS may block a downloaded copy until you explicitly approve it in Finder or Privacy & Security. The packaged app has no `get-task-allow` debugging entitlement. Safari development enablement and the pending acceptance cases below still apply.
 
@@ -128,5 +128,6 @@ The destination above targets Apple Silicon. Use the appropriate macOS architect
 - [Test plan and evidence](Docs/TEST_PLAN.md)
 - [Browser extension](BrowserExtension/README.md)
 - [Safari development builds](Docs/SAFARI_DEVELOPMENT_BUILD.md)
+- [Automatic preview releases](Docs/PREVIEW_RELEASES.md)
 
 Maintained by [infinityf4p](https://github.com/infinityf4p).

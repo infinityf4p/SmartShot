@@ -1,0 +1,21 @@
+name: Set up preview build tools
+description: Use Node 24 and a checksum-verified XcodeGen binary.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: '24'
+        package-manager-cache: false
+    - name: Install XcodeGen 2.46.0
+      shell: bash
+      run: |
+        tool_directory="$RUNNER_TEMP/xcodegen"
+        mkdir -p "$tool_directory"
+        curl --fail --location --retry 5 --connect-timeout 20 \
+          https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip \
+          -o "$tool_directory/xcodegen.zip"
+        echo '4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  xcodegen.zip' \
+          | (cd "$tool_directory" && shasum -a 256 -c -)
+        ditto -x -k "$tool_directory/xcodegen.zip" "$tool_directory"
+        echo "$tool_directory/xcodegen/bin" >> "$GITHUB_PATH"

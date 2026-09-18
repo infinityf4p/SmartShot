@@ -8,7 +8,7 @@ SmartShot 将智能选区、区域截图、长截图、图片编辑、本地 OCR
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-macOS 14+ · Swift 6 · 预览版本 0.2.3
+macOS 14+ · Swift 6 · 预览版
 
 ## 功能
 
@@ -25,12 +25,12 @@ macOS 14+ · Swift 6 · 预览版本 0.2.3
 
 ## 下载
 
-[SmartShot 0.2.3 预览版](https://github.com/infinityf4p/SmartShot/releases/tag/v0.2.3) 提供同时包含 Apple Silicon 和 Intel 架构的通用应用。
+[下载最新 SmartShot 预览版](https://github.com/infinityf4p/SmartShot/releases)。每版均提供同时包含 Apple Silicon 和 Intel 架构的通用应用，请在对应版本的附件中选择：
 
-- [macOS DMG](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-0.2.3-universal.dmg)
-- [macOS ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-0.2.3-universal.zip)
-- [浏览器扩展 ZIP](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SmartShot-Web-Selector-0.2.3.zip)
-- [SHA-256 校验文件](https://github.com/infinityf4p/SmartShot/releases/download/v0.2.3/SHA256SUMS.txt)
+- macOS DMG：`SmartShot-<version>-universal.dmg`
+- macOS ZIP：`SmartShot-<version>-universal.zip`
+- 浏览器扩展 ZIP：`SmartShot-Web-Selector-<version>.zip`
+- SHA-256 校验文件：`SHA256SUMS.txt`
 
 该预览版使用 ad-hoc 签名，没有 Developer ID 证书或 Apple 公证。macOS 可能会阻止下载的应用，需要你在 Finder 或“隐私与安全性”中明确允许打开。安装包不含 `get-task-allow` 调试权限；Safari 开发启用条件及下方待验收范围仍然适用。
 
@@ -128,5 +128,6 @@ npm --prefix BrowserExtension test
 - [测试计划与记录](Docs/TEST_PLAN.md)
 - [浏览器扩展](BrowserExtension/README.md)
 - [Safari 开发构建](Docs/SAFARI_DEVELOPMENT_BUILD.md)
+- [自动发布预览版](Docs/PREVIEW_RELEASES.md)
 
 维护者：[infinityf4p](https://github.com/infinityf4p)。
