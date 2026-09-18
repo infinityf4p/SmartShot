@@ -24,6 +24,58 @@ private extension View {
     }
 }
 
+private struct ToolbarScrollButton: NSViewRepresentable {
+    @Environment(\.isEnabled) private var isEnabled
+
+    let forward: Bool
+    let action: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(action: action)
+    }
+
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton()
+        button.setButtonType(.momentaryChange)
+        button.isBordered = false
+        button.imagePosition = .imageOnly
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.scroll(_:))
+        // Move once on press, then slowly repeat without an extra step on release.
+        button.sendAction(on: [.leftMouseDown, .periodic])
+        button.setPeriodicDelay(0.5, interval: 0.25)
+        return button
+    }
+
+    func updateNSView(_ button: NSButton, context: Context) {
+        let label = forward ? "Show more tools" : "Show previous tools"
+        // The next hidden tool changes after every scroll, including during a hold.
+        context.coordinator.action = action
+        button.isEnabled = isEnabled
+        button.image = NSImage(
+            systemSymbolName: forward ? "chevron.right" : "chevron.left",
+            accessibilityDescription: nil
+        )
+        button.toolTip = "\(label). Press and hold to scroll."
+        button.setAccessibilityLabel(label)
+        button.setAccessibilityHelp("Press and hold to scroll.")
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var action: () -> Void
+
+        init(action: @escaping () -> Void) {
+            self.action = action
+        }
+
+        @objc func scroll(_ sender: NSButton) {
+            guard sender.isEnabled else { return }
+            action()
+        }
+    }
+}
+
 struct CaptureEditorView: View {
     @ObservedObject var editor: CaptureEditorModel
     @State private var zoomScale: CGFloat = 1
@@ -83,89 +135,18 @@ struct CaptureEditorView: View {
             forward ? $0.value.minX < $1.value.minX : $0.value.maxX > $1.value.maxX
         }.first?.key
 
-        return Button {
+        return ToolbarScrollButton(forward: forward) {
             guard let target else { return }
             withAnimation(.easeInOut(duration: 0.2)) {
                 proxy.scrollTo(target, anchor: forward ? .trailing : .leading)
             }
-        } label: {
-            Image(systemName: forward ? "chevron.right" : "chevron.left")
-                .frame(width: 32, height: 56)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.borderless)
+        .frame(width: 32, height: 56)
         .disabled(target == nil)
-        .help(forward ? "Show more tools" : "Show previous tools")
-        .accessibilityLabel(forward ? "Show more tools" : "Show previous tools")
     }
 
     private var toolbarContents: some View {
         HStack(spacing: 6) {
-            ForEach(ScreenshotEditingTool.allCases, id: \.rawValue) { tool in
-                Button {
-                    editor.selectedTool = tool
-                } label: {
-                    Image(systemName: icon(for: tool))
-                        .frame(width: 20, height: 20)
-                }
-                .buttonStyle(.bordered)
-                .tint(editor.selectedTool == tool ? .accentColor : .secondary)
-                .help(label(for: tool))
-                .accessibilityLabel(label(for: tool))
-                .accessibilityAddTraits(editor.selectedTool == tool ? .isSelected : [])
-                .toolbarItem(tool.rawValue)
-            }
-
-            Divider()
-                .frame(height: 22)
-                .padding(.horizontal, 3)
-
-            HStack(spacing: 6) {
-                ForEach(colorChoices, id: \.name) { choice in
-                    Button {
-                        editor.selectedColor = choice.value
-                    } label: {
-                        Circle()
-                            .fill(swiftUIColor(choice.value))
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        editor.selectedColor == choice.value
-                                            ? Color.accentColor
-                                            : Color.primary.opacity(0.25),
-                                        lineWidth: editor.selectedColor == choice.value ? 3 : 1
-                                    )
-                                    .padding(editor.selectedColor == choice.value ? -3 : 0)
-                            }
-                            .frame(width: 16, height: 16)
-                            .frame(width: 26, height: 26)
-                    }
-                    .buttonStyle(.plain)
-                    .help(choice.name)
-                    .accessibilityLabel(choice.name)
-                    .accessibilityAddTraits(editor.selectedColor == choice.value ? .isSelected : [])
-                    .toolbarItem("color-\(choice.name)")
-                }
-
-                Slider(value: $editor.lineWidthPoints, in: 1...12, step: 1)
-                    .frame(width: 86)
-                    .help("Line width")
-                    .accessibilityLabel("Line width")
-                    .toolbarItem("line-width")
-            }
-
-            if editor.selectedTool == .text {
-                TextField("Text", text: $editor.textDraft)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 128)
-                    .accessibilityLabel("Annotation text")
-                    .toolbarItem("text-entry")
-            }
-
-            Divider()
-                .frame(height: 22)
-                .padding(.horizontal, 3)
-
             HStack(spacing: 6) {
                 Button(action: editor.undo) {
                     Image(systemName: "arrow.uturn.backward")
@@ -231,6 +212,71 @@ struct CaptureEditorView: View {
                 .disabled(!editor.hasEdits)
                 .help("Reset all edits")
                 .toolbarItem("reset-edits")
+            }
+
+            Divider()
+                .frame(height: 22)
+                .padding(.horizontal, 3)
+
+            ForEach(ScreenshotEditingTool.allCases, id: \.rawValue) { tool in
+                Button {
+                    editor.selectedTool = tool
+                } label: {
+                    Image(systemName: icon(for: tool))
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.bordered)
+                .tint(editor.selectedTool == tool ? .accentColor : .secondary)
+                .help(label(for: tool))
+                .accessibilityLabel(label(for: tool))
+                .accessibilityAddTraits(editor.selectedTool == tool ? .isSelected : [])
+                .toolbarItem(tool.rawValue)
+            }
+
+            Divider()
+                .frame(height: 22)
+                .padding(.horizontal, 3)
+
+            HStack(spacing: 6) {
+                ForEach(colorChoices, id: \.name) { choice in
+                    Button {
+                        editor.selectedColor = choice.value
+                    } label: {
+                        Circle()
+                            .fill(swiftUIColor(choice.value))
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        editor.selectedColor == choice.value
+                                            ? Color.accentColor
+                                            : Color.primary.opacity(0.25),
+                                        lineWidth: editor.selectedColor == choice.value ? 3 : 1
+                                    )
+                                    .padding(editor.selectedColor == choice.value ? -3 : 0)
+                            }
+                            .frame(width: 16, height: 16)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .help(choice.name)
+                    .accessibilityLabel(choice.name)
+                    .accessibilityAddTraits(editor.selectedColor == choice.value ? .isSelected : [])
+                    .toolbarItem("color-\(choice.name)")
+                }
+
+                Slider(value: $editor.lineWidthPoints, in: 1...12, step: 1)
+                    .frame(width: 86)
+                    .help("Line width")
+                    .accessibilityLabel("Line width")
+                    .toolbarItem("line-width")
+            }
+
+            if editor.selectedTool == .text {
+                TextField("Text", text: $editor.textDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 128)
+                    .accessibilityLabel("Annotation text")
+                    .toolbarItem("text-entry")
             }
 
             Divider()
