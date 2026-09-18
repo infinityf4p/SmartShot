@@ -24,6 +24,58 @@ private extension View {
     }
 }
 
+private struct ToolbarScrollButton: NSViewRepresentable {
+    @Environment(\.isEnabled) private var isEnabled
+
+    let forward: Bool
+    let action: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(action: action)
+    }
+
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton()
+        button.setButtonType(.momentaryChange)
+        button.isBordered = false
+        button.imagePosition = .imageOnly
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.scroll(_:))
+        // Move once on press, then slowly repeat without an extra step on release.
+        button.sendAction(on: [.leftMouseDown, .periodic])
+        button.setPeriodicDelay(0.5, interval: 0.25)
+        return button
+    }
+
+    func updateNSView(_ button: NSButton, context: Context) {
+        let label = forward ? "Show more tools" : "Show previous tools"
+        // The next hidden tool changes after every scroll, including during a hold.
+        context.coordinator.action = action
+        button.isEnabled = isEnabled
+        button.image = NSImage(
+            systemSymbolName: forward ? "chevron.right" : "chevron.left",
+            accessibilityDescription: nil
+        )
+        button.toolTip = "\(label). Press and hold to scroll."
+        button.setAccessibilityLabel(label)
+        button.setAccessibilityHelp("Press and hold to scroll.")
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var action: () -> Void
+
+        init(action: @escaping () -> Void) {
+            self.action = action
+        }
+
+        @objc func scroll(_ sender: NSButton) {
+            guard sender.isEnabled else { return }
+            action()
+        }
+    }
+}
+
 struct CaptureEditorView: View {
     @ObservedObject var editor: CaptureEditorModel
     @State private var zoomScale: CGFloat = 1
@@ -83,20 +135,14 @@ struct CaptureEditorView: View {
             forward ? $0.value.minX < $1.value.minX : $0.value.maxX > $1.value.maxX
         }.first?.key
 
-        return Button {
+        return ToolbarScrollButton(forward: forward) {
             guard let target else { return }
             withAnimation(.easeInOut(duration: 0.2)) {
                 proxy.scrollTo(target, anchor: forward ? .trailing : .leading)
             }
-        } label: {
-            Image(systemName: forward ? "chevron.right" : "chevron.left")
-                .frame(width: 32, height: 56)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.borderless)
+        .frame(width: 32, height: 56)
         .disabled(target == nil)
-        .help(forward ? "Show more tools" : "Show previous tools")
-        .accessibilityLabel(forward ? "Show more tools" : "Show previous tools")
     }
 
     private var toolbarContents: some View {
