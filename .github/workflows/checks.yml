@@ -1,0 +1,42 @@
+name: Validate Preview Build
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-build
+      - name: Test release recovery and version allocation
+        run: python3 -m unittest discover -s Scripts/tests -v
+      - name: Check shell syntax
+        run: bash -n Scripts/build_preview.sh
+      - name: Test the browser extension
+        run: npm --prefix BrowserExtension test
+      - name: Test the native app
+        run: |
+          xcodegen generate
+          xcodebuild -project SmartShot.xcodeproj -scheme SmartShot \
+            -configuration Debug -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath "$RUNNER_TEMP/TestDerivedData" test \
+            CODE_SIGNING_ALLOWED=NO REGISTER_WITH_LAUNCH_SERVICES=NO
+      - name: Build and verify packages without publishing
+        run: |
+          read -r version build < <(python3 Scripts/release_artifacts.py version .)
+          bash Scripts/build_preview.sh "$version" "$build" "$RUNNER_TEMP/preview-check"

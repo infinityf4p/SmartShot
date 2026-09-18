@@ -1,0 +1,88 @@
+name: Publish Preview
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Number of the merged PR to release or retry
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Preserve pending merges; GitHub's default queue keeps only one pending run.
+concurrency:
+  group: smartshot-preview-release
+  queue: max
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  publish:
+    if: >-
+      (github.event_name == 'pull_request_target' && github.event.pull_request.merged == true) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: read
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pull_request }}
+    steps:
+      # This is the trusted base revision. Never check out an unmerged PR head.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set temporary paths
+        run: |
+          echo "SOURCE_DIRECTORY=$RUNNER_TEMP/release-source" >> "$GITHUB_ENV"
+          echo "PLAN_FILE=$RUNNER_TEMP/release-plan.json" >> "$GITHUB_ENV"
+          echo "ASSET_DIRECTORY=$RUNNER_TEMP/release-assets" >> "$GITHUB_ENV"
+      - name: Resolve and validate the merged PR
+        id: merged
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 Scripts/preview_release.py resolve --repository "$GITHUB_REPOSITORY" --pr "$PR_NUMBER"
+      - name: Check out the exact merged source
+        env:
+          MERGE_COMMIT: ${{ steps.merged.outputs.commit }}
+        run: git worktree add --detach "$SOURCE_DIRECTORY" "$MERGE_COMMIT"
+      - uses: ./.github/actions/setup-build
+      - name: Test release recovery and version allocation
+        run: python3 -m unittest discover -s Scripts/tests -v
+      - name: Test the browser extension
+        run: npm --prefix "$SOURCE_DIRECTORY/BrowserExtension" test
+      - name: Test the native app
+        run: |
+          (cd "$SOURCE_DIRECTORY" && xcodegen generate)
+          xcodebuild -project "$SOURCE_DIRECTORY/SmartShot.xcodeproj" -scheme SmartShot \
+            -configuration Debug -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath "$RUNNER_TEMP/TestDerivedData" test \
+            CODE_SIGNING_ALLOWED=NO REGISTER_WITH_LAUNCH_SERVICES=NO
+      - name: Reserve or reuse a preview version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 Scripts/preview_release.py reserve --repository "$GITHUB_REPOSITORY" \
+            --pr "$PR_NUMBER" --source "$SOURCE_DIRECTORY" --plan "$PLAN_FILE"
+      - name: Build and verify universal packages
+        if: steps.release.outputs.needs_build == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_BUILD: ${{ steps.release.outputs.build }}
+        run: bash Scripts/build_preview.sh "$RELEASE_VERSION" "$RELEASE_BUILD" "$ASSET_DIRECTORY" "$SOURCE_DIRECTORY"
+      - name: Upload all assets and publish the preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 Scripts/preview_release.py publish --repository "$GITHUB_REPOSITORY" \
+            --plan "$PLAN_FILE" --assets "$ASSET_DIRECTORY"
