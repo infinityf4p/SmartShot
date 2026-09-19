@@ -1,3 +1,4 @@
+import SmartShotCore
 import CoreGraphics
 import Foundation
 import Vision
@@ -42,15 +43,15 @@ enum TextRecognitionError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidImage:
-            "The image cannot be recognized."
+            L10n.text("The image cannot be recognized.")
         case .invalidConfiguration:
-            "The text recognition configuration is invalid."
+            L10n.text("The text recognition configuration is invalid.")
         case .imageTooLarge:
-            "The image is too large for text recognition."
+            L10n.text("The image is too large for text recognition.")
         case .tileCreationFailed:
-            "The image could not be divided for text recognition."
+            L10n.text("The image could not be divided for text recognition.")
         case .visionRequestFailed:
-            "Text recognition failed."
+            L10n.text("Text recognition failed.")
         }
     }
 }

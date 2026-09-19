@@ -1,3 +1,4 @@
+import SmartShotCore
 import AppKit
 import AVKit
 import SwiftUI
@@ -22,67 +23,67 @@ struct MainView: View {
                     if model.isFinalizingScreenRecording {
                         ProgressView()
                             .controlSize(.small)
-                        Text("Finalizing")
+                        Text(L10n.text("Finalizing"))
                             .foregroundStyle(.secondary)
                     } else {
                         Button(action: model.stopScreenRecording) {
-                            Label("Stop", systemImage: "stop.circle.fill")
+                            Label(L10n.text("Stop"), systemImage: "stop.circle.fill")
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(!model.canStopScreenRecording)
                         Button(role: .cancel, action: model.cancelScreenRecording) {
-                            Label("Cancel", systemImage: "xmark.circle")
+                            Label(L10n.text("Cancel"), systemImage: "xmark.circle")
                         }
                     }
                 } else if model.isScrollingCapture, model.state == .capturing {
                     if model.isManualScrollingCapture {
                         Button(action: model.finishManualScrollingCapture) {
-                            Label("Done", systemImage: "checkmark.circle")
+                            Label(L10n.text("Done"), systemImage: "checkmark.circle")
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(!model.canFinishManualScrollingCapture)
-                        .help("Finish and stitch the long capture")
+                        .help(L10n.text("Finish and stitch the long capture"))
                     }
                     Button(role: .cancel, action: model.cancelCapture) {
-                        Label("Cancel", systemImage: "stop.circle")
+                        Label(L10n.text("Cancel"), systemImage: "stop.circle")
                     }
-                    .help("Cancel scrolling capture")
+                    .help(L10n.text("Cancel scrolling capture"))
                 } else {
                     Button {
                         model.startCapture(origin: .mainWindow)
                     } label: {
-                        Label("Capture", systemImage: "viewfinder")
+                        Label(L10n.text("Capture"), systemImage: "viewfinder")
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isBusy)
-                    .help("Choose Smart, Region, Long, or App Scroll (\(model.shortcutDisplayName))")
+                    .help(L10n.format("Choose Smart, Region, Long, or App Scroll (%@)", String(describing: model.shortcutDisplayName)))
 
                     Menu {
                         Button {
                             model.startRegionRecording(origin: .mainWindow)
                         } label: {
-                            Label("Record Region", systemImage: "record.circle")
+                            Label(L10n.text("Record Region"), systemImage: "record.circle")
                         }
                         Button {
                             model.startDisplayRecording(origin: .mainWindow)
                         } label: {
-                            Label("Record Current Display", systemImage: "display")
+                            Label(L10n.text("Record Current Display"), systemImage: "display")
                         }
                         Divider()
                         Button {
                             model.startScrollingCapture(origin: .mainWindow)
                         } label: {
-                            Label("Automatic App Scroll (Experimental)", systemImage: AppSymbol.scrollingCapture)
+                            Label(L10n.text("Automatic App Scroll (Experimental)"), systemImage: AppSymbol.scrollingCapture)
                         }
                     } label: {
-                        Label("More", systemImage: "ellipsis.circle")
+                        Label(L10n.text("More"), systemImage: "ellipsis.circle")
                     }
                     .disabled(model.isBusy)
                 }
             }
         }
-        .alert("SmartShot couldn't complete the action", isPresented: errorBinding) {
-            Button("OK", role: .cancel) { model.clearError() }
+        .alert(L10n.text("SmartShot couldn't complete the action"), isPresented: errorBinding) {
+            Button(L10n.text("OK"), role: .cancel) { model.clearError() }
         } message: {
             Text(errorMessage)
         }
@@ -101,7 +102,7 @@ struct MainView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Label("SmartShot", systemImage: "viewfinder")
                     .font(.title2.weight(.semibold))
-                Text("Smart capture, long capture, and recording")
+                Text(L10n.text("Smart capture, long capture, and recording"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -112,7 +113,7 @@ struct MainView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 14) {
-                Text("ACCESS")
+                Text(L10n.text("ACCESS"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
 
@@ -123,8 +124,8 @@ struct MainView: View {
                 )
 
                 PermissionRow(
-                    title: "Screen Recording",
-                    detail: "Required to create screenshots",
+                    title: L10n.text("Screen Recording"),
+                    detail: L10n.text("Required to create screenshots"),
                     isGranted: model.permissions.hasScreenCaptureAccess,
                     actionTitle: model.permissions.screenCaptureActionTitle,
                     action: model.permissions.hasScreenCaptureAccess
@@ -133,8 +134,8 @@ struct MainView: View {
                 )
 
                 PermissionRow(
-                    title: "Accessibility",
-                    detail: "Improves content block detection",
+                    title: L10n.text("Accessibility"),
+                    detail: L10n.text("Improves content block detection"),
                     isGranted: model.permissions.hasAccessibilityAccess,
                     actionTitle: model.permissions.accessibilityActionTitle,
                     action: model.permissions.hasAccessibilityAccess
@@ -148,7 +149,7 @@ struct MainView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("HISTORY")
+                    Text(L10n.text("HISTORY"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -160,20 +161,20 @@ struct MainView: View {
                     }
                 }
 
-                TextField("Search history", text: $model.captureHistoryQuery)
+                TextField(L10n.text("Search history"), text: $model.captureHistoryQuery)
                     .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Search screenshot history")
+                    .accessibilityLabel(L10n.text("Search screenshot history"))
 
                 if !model.hasCaptureHistory {
                     ContentUnavailableView(
-                        "No History",
+                        L10n.text("No History"),
                         systemImage: "clock.arrow.circlepath"
                     )
                     .controlSize(.small)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if model.captureHistoryItems.isEmpty {
                     ContentUnavailableView(
-                        "No Results",
+                        L10n.text("No Results"),
                         systemImage: "magnifyingglass"
                     )
                     .controlSize(.small)
@@ -226,7 +227,7 @@ struct MainView: View {
                                 .scaledToFit()
                                 .frame(maxWidth: proxy.size.width, maxHeight: proxy.size.height)
                                 .frame(width: proxy.size.width, height: proxy.size.height)
-                                .accessibilityLabel("Latest screenshot preview")
+                                .accessibilityLabel(L10n.text("Latest screenshot preview"))
                         }
                         .padding(20)
                     }
@@ -258,22 +259,22 @@ struct MainView: View {
                 }
             } else {
                 ContentUnavailableView {
-                    Label("No Captures", systemImage: "viewfinder")
+                    Label(L10n.text("No Captures"), systemImage: "viewfinder")
                 } description: {
-                    Text("Captured images appear here.")
+                    Text(L10n.text("Captured images appear here."))
                 } actions: {
                     HStack(spacing: 8) {
                         Button {
                             model.startCapture(origin: .mainWindow)
                         } label: {
-                            Label("Capture", systemImage: "viewfinder")
+                            Label(L10n.text("Capture"), systemImage: "viewfinder")
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(model.isBusy)
                         Button {
                             model.startRegionRecording(origin: .mainWindow)
                         } label: {
-                            Label("Record", systemImage: "record.circle")
+                            Label(L10n.text("Record"), systemImage: "record.circle")
                         }
                         .disabled(model.isBusy)
                     }
@@ -287,7 +288,7 @@ struct MainView: View {
             Text(capture.label)
                 .font(.subheadline.weight(.medium))
                 .lineLimit(1)
-            Text("\(Int(previewSize.width)) x \(Int(previewSize.height)) points")
+            Text(L10n.format("%@ x %@ points", String(describing: Int(previewSize.width)), String(describing: Int(previewSize.height))))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let status = model.lastOutputStatus {
@@ -303,35 +304,35 @@ struct MainView: View {
     private var flattenCaptureButton: some View {
         if let editor = model.captureEditor, editor.hasEdits {
             Button(action: model.flattenLatestEdits) {
-                Label("Flatten", systemImage: "square.stack.3d.down.forward")
+                Label(L10n.text("Flatten"), systemImage: "square.stack.3d.down.forward")
             }
             .fixedSize()
-            .help("Replace the original and history copy with the rendered edits")
+            .help(L10n.text("Replace the original and history copy with the rendered edits"))
         }
     }
 
     private var captureOutputButtons: some View {
         HStack(spacing: 10) {
             Button(action: model.pinLatest) {
-                Label("Pin", systemImage: "pin")
+                Label(L10n.text("Pin"), systemImage: "pin")
             }
-            .help("Keep the screenshot above other windows")
+            .help(L10n.text("Keep the screenshot above other windows"))
             Button(action: model.copyLatest) {
-                Label("Copy", systemImage: "doc.on.doc")
+                Label(L10n.text("Copy"), systemImage: "doc.on.doc")
             }
-            .help("Copy the screenshot")
+            .help(L10n.text("Copy the screenshot"))
             ControlGroup {
                 Button(action: model.quickSaveLatest) {
-                    Label("Save", systemImage: "square.and.arrow.down")
+                    Label(L10n.text("Save"), systemImage: "square.and.arrow.down")
                         .labelStyle(.titleAndIcon)
                 }
-                .help("Quick Save: Save immediately to the Quick Save folder")
+                .help(L10n.text("Quick Save: Save immediately to the Quick Save folder"))
                 Button(action: model.saveLatest) {
                     Image(systemName: "chevron.down")
                         .frame(width: 12)
                 }
-                .help("Save with options: Choose a filename and location")
-                .accessibilityLabel("Save with options")
+                .help(L10n.text("Save with options: Choose a filename and location"))
+                .accessibilityLabel(L10n.text("Save with options"))
             }
             .controlGroupStyle(.navigation)
             .buttonStyle(.borderedProminent)
@@ -352,10 +353,10 @@ struct MainView: View {
         }
         .buttonStyle(.borderless)
         .disabled(model.isBusy)
-        .help("Close screenshot")
-        .accessibilityLabel("Close screenshot")
+        .help(L10n.text("Close screenshot"))
+        .accessibilityLabel(L10n.text("Close screenshot"))
         .confirmationDialog(
-            "Close screenshot?",
+            L10n.text("Close screenshot?"),
             isPresented: Binding(
                 get: { capturePendingClose != nil },
                 set: { if !$0 { capturePendingClose = nil } }
@@ -363,12 +364,12 @@ struct MainView: View {
             titleVisibility: .visible,
             presenting: capturePendingClose
         ) { editor in
-            Button("Close Screenshot", role: .destructive) {
+            Button(L10n.text("Close Screenshot"), role: .destructive) {
                 guard model.captureEditor === editor else { return }
                 model.closeLatestCapture()
             }
         } message: { _ in
-            Text("Edits in this preview will be discarded. Saved files and history will be kept.")
+            Text(L10n.text("Edits in this preview will be discarded. Saved files and history will be kept."))
         }
     }
 
@@ -378,28 +379,28 @@ struct MainView: View {
 
     private var statusText: String {
         switch model.state {
-        case .idle: "Ready"
-        case .selecting: "Selecting content"
+        case .idle: L10n.text("Ready")
+        case .selecting: L10n.text("Selecting content")
         case .capturing:
             if model.isScreenRecordingWorkflow {
-                model.recordingStatusText ?? "Recording screen"
+                model.recordingStatusText ?? L10n.text("Recording screen")
             } else if let progress = model.manualScrollingCaptureProgress {
                 switch progress.phase {
                 case .preparing:
-                    "Preparing long capture"
+                    L10n.text("Preparing long capture")
                 case .ready:
-                    "Long capture ready"
+                    L10n.text("Long capture ready")
                 case .capturing:
-                    "Long capture: \(progress.fragmentCount) sections"
+                    L10n.format("Long capture: %@ sections", String(describing: progress.fragmentCount))
                 case .stitching:
-                    "Stitching long capture"
+                    L10n.text("Stitching long capture")
                 }
             } else if let progress = model.scrollingCaptureProgress {
-                "Capturing scroll area \(Int(progress * 100))%"
+                L10n.format("Capturing scroll area %@%%", String(describing: Int(progress * 100)))
             } else {
-                "Creating screenshot"
+                L10n.text("Creating screenshot")
             }
-        case .failed: "Action needed"
+        case .failed: L10n.text("Action needed")
         }
     }
 
@@ -433,7 +434,7 @@ private struct RecordingResultView: View {
                 RecordingPlayerView(url: artifact.fileURL)
                     .frame(width: proxy.size.width, height: proxy.size.height)
                     .background(Color.black)
-                    .accessibilityLabel("Latest screen recording preview")
+                    .accessibilityLabel(L10n.text("Latest screen recording preview"))
             }
             .padding(20)
 
@@ -458,26 +459,26 @@ private struct RecordingResultView: View {
                 Button(action: model.revealLatestRecording) {
                     Image(systemName: "folder")
                 }
-                .help("Reveal recording in Finder")
+                .help(L10n.text("Reveal recording in Finder"))
                 Button(action: model.copyLatestRecordingFile) {
                     Image(systemName: "doc.on.doc")
                 }
-                .help("Copy recording file")
+                .help(L10n.text("Copy recording file"))
                 if model.isExportingRecordingGIF {
                     ProgressView()
                         .controlSize(.small)
                     Button(role: .cancel, action: model.cancelRecordingGIFExport) {
                         Image(systemName: "xmark")
                     }
-                    .help("Cancel GIF export")
+                    .help(L10n.text("Cancel GIF export"))
                 } else {
                     Button(action: model.exportLatestRecordingAsGIF) {
                         Label("GIF", systemImage: "photo.stack")
                     }
-                    .help("Export up to 30 seconds as GIF")
+                    .help(L10n.text("Export up to 30 seconds as GIF"))
                 }
                 Button(action: model.saveLatestRecordingAs) {
-                    Label("Save As", systemImage: "square.and.arrow.down")
+                    Label(L10n.text("Save As"), systemImage: "square.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(model.isExportingRecordingGIF)
@@ -492,9 +493,9 @@ private struct RecordingResultView: View {
         let duration = String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
         let size = "\(Int(artifact.pixelSize.width)) x \(Int(artifact.pixelSize.height))"
         var audio: [String] = []
-        if artifact.capturesSystemAudio { audio.append("system audio") }
-        if artifact.capturesMicrophone { audio.append("microphone") }
-        return "\(duration) | \(size) px | \(audio.isEmpty ? "video only" : audio.joined(separator: " + "))"
+        if artifact.capturesSystemAudio { audio.append(L10n.text("system audio")) }
+        if artifact.capturesMicrophone { audio.append(L10n.text("microphone")) }
+        return L10n.format("%@ | %@ px | %@", String(describing: duration), String(describing: size), String(describing: audio.isEmpty ? L10n.text("video only") : audio.joined(separator: " + ")))
     }
 }
 
@@ -587,7 +588,7 @@ private struct CaptureHistoryRow: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help("Delete history item")
+            .help(L10n.text("Delete history item"))
         }
         .padding(6)
         .background(
@@ -625,7 +626,7 @@ private struct PermissionRow: View {
                 .controlSize(.small)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title), \(isGranted ? "allowed" : "not allowed")")
+        .accessibilityLabel("\(title), \(isGranted ? L10n.text("allowed") : L10n.text("not allowed"))")
     }
 }
 
@@ -641,7 +642,7 @@ private struct ShortcutRow: View {
                 .frame(width: 18)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Global Shortcut")
+                Text(L10n.text("Global Shortcut"))
                     .font(.subheadline.weight(.medium))
                 Text(detail)
                     .font(.caption)
@@ -650,11 +651,11 @@ private struct ShortcutRow: View {
             }
             Spacer(minLength: 4)
             if !isReady {
-                Button("Retry", action: retry)
+                Button(L10n.text("Retry"), action: retry)
                     .controlSize(.small)
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Global shortcut, \(detail)")
+        .accessibilityLabel(L10n.format("Global shortcut, %@", String(describing: detail)))
     }
 }

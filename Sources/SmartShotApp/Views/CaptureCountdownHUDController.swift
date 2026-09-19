@@ -1,3 +1,4 @@
+import SmartShotCore
 import AppKit
 
 @MainActor
@@ -46,8 +47,8 @@ final class CaptureCountdownHUDController {
         label.font = .monospacedDigitSystemFont(ofSize: 42, weight: .semibold)
         label.textColor = .labelColor
         label.alignment = .center
-        label.setAccessibilityLabel("Capture countdown")
-        label.setAccessibilityValue("\(seconds) seconds")
+        label.setAccessibilityLabel(L10n.text("Capture countdown"))
+        label.setAccessibilityValue(L10n.format("%@ seconds", String(describing: seconds)))
         effect.addSubview(label)
 
         NSLayoutConstraint.activate([
@@ -72,7 +73,7 @@ final class CaptureCountdownHUDController {
 
     func update(seconds: Int) {
         valueLabel?.stringValue = "\(seconds)"
-        valueLabel?.setAccessibilityValue("\(seconds) seconds")
+        valueLabel?.setAccessibilityValue(L10n.format("%@ seconds", String(describing: seconds)))
     }
 
     func hide() {

@@ -1,3 +1,4 @@
+import SmartShotCore
 import AVFoundation
 import CoreMedia
 import Foundation
@@ -173,7 +174,7 @@ enum RecordingDestinationInstallerError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .stagingFileOutsideDestinationDirectory:
-            "The recording staging file is not in the destination directory."
+            L10n.text("The recording staging file is not in the destination directory.")
         }
     }
 }
@@ -245,7 +246,7 @@ enum RecordingMP4Exporter {
         fileManager: FileManager = .default
     ) async throws -> RecordingExportMetadata {
         guard !fileManager.fileExists(atPath: destinationURL.path) else {
-            throw ScreenRecordingError.exportFailed("The destination file already exists.")
+            throw ScreenRecordingError.exportFailed(L10n.text("The destination file already exists."))
         }
 
         let source = AVURLAsset(url: rawRecordingURL)
@@ -269,7 +270,7 @@ enum RecordingMP4Exporter {
               duration.isNumeric,
               CMTimeCompare(duration, .zero) > 0,
               let sourceVideoTrack = videoTracks.first else {
-            throw ScreenRecordingError.exportFailed("The temporary recording has no video track.")
+            throw ScreenRecordingError.exportFailed(L10n.text("The temporary recording has no video track."))
         }
 
         let composition = AVMutableComposition()
@@ -278,13 +279,13 @@ enum RecordingMP4Exporter {
             guard sourceVideoTimeRange.isValid,
                   !sourceVideoTimeRange.isEmpty,
                   CMTimeCompare(sourceVideoTimeRange.duration, .zero) > 0 else {
-                throw ScreenRecordingError.exportFailed("The video track has no usable duration.")
+                throw ScreenRecordingError.exportFailed(L10n.text("The video track has no usable duration."))
             }
             guard let videoTrack = composition.addMutableTrack(
                 withMediaType: .video,
                 preferredTrackID: kCMPersistentTrackID_Invalid
             ) else {
-                throw ScreenRecordingError.exportFailed("A video composition track could not be created.")
+                throw ScreenRecordingError.exportFailed(L10n.text("A video composition track could not be created."))
             }
             try videoTrack.insertTimeRange(sourceVideoTimeRange, of: sourceVideoTrack, at: .zero)
             videoTrack.preferredTransform = try await sourceVideoTrack.load(.preferredTransform)
@@ -307,7 +308,7 @@ enum RecordingMP4Exporter {
                     preferredTrackID: kCMPersistentTrackID_Invalid
                 ) else {
                     throw ScreenRecordingError.exportFailed(
-                        "An audio composition track could not be created."
+                        L10n.text("An audio composition track could not be created.")
                     )
                 }
                 let insertionTime = CMTimeSubtract(
@@ -328,7 +329,7 @@ enum RecordingMP4Exporter {
                 asset: composition,
                 presetName: AVAssetExportPresetHighestQuality
             ), exporter.supportedFileTypes.contains(.mp4) else {
-                throw ScreenRecordingError.exportFailed("H.264 MP4 export is unavailable.")
+                throw ScreenRecordingError.exportFailed(L10n.text("H.264 MP4 export is unavailable."))
             }
             exporter.outputURL = destinationURL
             exporter.outputFileType = .mp4
@@ -342,10 +343,10 @@ enum RecordingMP4Exporter {
             try await run(exporter)
             let metadata = try await inspect(url: destinationURL)
             guard try await containsH264Video(url: destinationURL) else {
-                throw ScreenRecordingError.exportFailed("The exported video is not H.264.")
+                throw ScreenRecordingError.exportFailed(L10n.text("The exported video is not H.264."))
             }
             guard try await containsOnlyAACAudio(url: destinationURL) else {
-                throw ScreenRecordingError.exportFailed("The exported audio is not AAC.")
+                throw ScreenRecordingError.exportFailed(L10n.text("The exported audio is not AAC."))
             }
             return metadata
         } catch {
@@ -370,7 +371,7 @@ enum RecordingMP4Exporter {
                 default:
                     continuation.resume(
                         throwing: ScreenRecordingError.exportFailed(
-                            box.session.error?.localizedDescription ?? "Unknown export failure."
+                            box.session.error?.localizedDescription ?? L10n.text("Unknown export failure.")
                         )
                     )
                 }
@@ -382,7 +383,7 @@ enum RecordingMP4Exporter {
         let asset = AVURLAsset(url: url)
         let duration = try await asset.load(.duration)
         guard let track = try await asset.loadTracks(withMediaType: .video).first else {
-            throw ScreenRecordingError.exportFailed("The exported file has no video track.")
+            throw ScreenRecordingError.exportFailed(L10n.text("The exported file has no video track."))
         }
         let naturalSize = try await track.load(.naturalSize)
         let transform = try await track.load(.preferredTransform)
@@ -396,7 +397,7 @@ enum RecordingMP4Exporter {
               transformed.height.isFinite,
               transformed.width > 0,
               transformed.height > 0 else {
-            throw ScreenRecordingError.exportFailed("The exported media metadata is invalid.")
+            throw ScreenRecordingError.exportFailed(L10n.text("The exported media metadata is invalid."))
         }
         return RecordingExportMetadata(
             duration: durationSeconds,

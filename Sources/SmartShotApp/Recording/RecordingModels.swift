@@ -1,3 +1,4 @@
+import SmartShotCore
 import CoreGraphics
 import CoreMedia
 import Foundation
@@ -198,33 +199,33 @@ enum ScreenRecordingError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .sessionAlreadyActive:
-            "A screen recording is already active."
+            L10n.text("A screen recording is already active.")
         case .sessionNotActive:
-            "There is no active screen recording."
+            L10n.text("There is no active screen recording.")
         case .invalidSessionTransition:
-            "The screen recording changed state unexpectedly."
+            L10n.text("The screen recording changed state unexpectedly.")
         case .screenCapturePermissionDenied:
-            "Screen Recording access is required."
+            L10n.text("Screen Recording access is required.")
         case .microphonePermissionDenied:
-            "Microphone access is required when microphone recording is enabled."
+            L10n.text("Microphone access is required when microphone recording is enabled.")
         case .displayUnavailable:
-            "The selected display is no longer available."
+            L10n.text("The selected display is no longer available.")
         case .invalidSourceGeometry:
-            "The selected recording area is invalid or crosses a display boundary."
+            L10n.text("The selected recording area is invalid or crosses a display boundary.")
         case .cannotCreateWorkingDirectory:
-            "SmartShot could not create a temporary recording directory."
+            L10n.text("SmartShot could not create a temporary recording directory.")
         case let .cannotConfigureWriter(message):
-            "SmartShot could not configure the video encoder: \(message)"
+            L10n.format("SmartShot could not configure the video encoder: %@", String(describing: message))
         case let .cannotConfigureMicrophone(message):
-            "SmartShot could not configure the microphone: \(message)"
+            L10n.format("SmartShot could not configure the microphone: %@", String(describing: message))
         case .noVideoFrames:
-            "The recording ended before any video frames were captured."
+            L10n.text("The recording ended before any video frames were captured.")
         case let .writerFailed(message):
-            "SmartShot could not finish the recording: \(message)"
+            L10n.format("SmartShot could not finish the recording: %@", String(describing: message))
         case let .exportFailed(message):
-            "SmartShot could not export the recording: \(message)"
+            L10n.format("SmartShot could not export the recording: %@", String(describing: message))
         case let .streamStopped(message):
-            "Screen capture stopped unexpectedly: \(message)"
+            L10n.format("Screen capture stopped unexpectedly: %@", String(describing: message))
         }
     }
 }

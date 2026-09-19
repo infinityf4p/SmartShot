@@ -1,3 +1,4 @@
+import SmartShotCore
 import AVFoundation
 import Foundation
 
@@ -51,7 +52,7 @@ final class MicrophoneCaptureService: @unchecked Sendable {
             forInfoDictionaryKey: "NSMicrophoneUsageDescription"
         ) as? String != nil else {
             throw ScreenRecordingError.cannotConfigureMicrophone(
-                "NSMicrophoneUsageDescription is missing from the application Info.plist."
+                L10n.text("NSMicrophoneUsageDescription is missing from the application Info.plist.")
             )
         }
         guard await Self.requestAuthorization() else {
@@ -64,7 +65,7 @@ final class MicrophoneCaptureService: @unchecked Sendable {
                 guard captureSession == nil else {
                     continuation.resume(
                         throwing: ScreenRecordingError.cannotConfigureMicrophone(
-                            "A microphone session is already running."
+                            L10n.text("A microphone session is already running.")
                         )
                     )
                     return
@@ -77,13 +78,13 @@ final class MicrophoneCaptureService: @unchecked Sendable {
                     do {
                         guard let device = AVCaptureDevice.default(for: .audio) else {
                             throw ScreenRecordingError.cannotConfigureMicrophone(
-                                "No audio input device is available."
+                                L10n.text("No audio input device is available.")
                             )
                         }
                         let input = try AVCaptureDeviceInput(device: device)
                         guard session.canAddInput(input), session.canAddOutput(output) else {
                             throw ScreenRecordingError.cannotConfigureMicrophone(
-                                "The selected audio input cannot be connected."
+                                L10n.text("The selected audio input cannot be connected.")
                             )
                         }
                         session.addInput(input)
@@ -99,7 +100,7 @@ final class MicrophoneCaptureService: @unchecked Sendable {
                     guard session.isRunning else {
                         output.setSampleBufferDelegate(nil, queue: nil)
                         throw ScreenRecordingError.cannotConfigureMicrophone(
-                            "The audio capture session did not start."
+                            L10n.text("The audio capture session did not start.")
                         )
                     }
                     captureSession = session

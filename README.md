@@ -43,6 +43,8 @@ This preview is ad-hoc signed, without a Developer ID certificate or Apple notar
 
 The initial native shortcut is `Control-Shift-2`. If it conflicts with another app, use the shortcut shown in SmartShot or change it in Settings.
 
+The app starts in English by default. Choose **Settings > General > Language > 简体中文** for Simplified Chinese, then quit and reopen SmartShot. The language choice is saved; choosing **English** switches back after a restart.
+
 ## Build Locally
 
 Requirements: macOS 14+, Xcode with Swift 6 support, [XcodeGen](https://github.com/yonaskolb/XcodeGen), and Node.js for browser tests. The current checkout has been tested on Apple Silicon with Xcode 26.6.

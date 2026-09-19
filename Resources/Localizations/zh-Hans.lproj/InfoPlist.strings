@@ -1,0 +1,3 @@
+"NSAccessibilityUsageDescription" = "SmartShot 使用辅助功能信息来识别鼠标指针下的界面内容块。";
+"NSMicrophoneUsageDescription" = "SmartShot 仅在录屏时启用了麦克风音频的情况下使用麦克风。";
+"NSScreenCaptureUsageDescription" = "SmartShot 需要屏幕访问权限，以截取你选择的内容。";

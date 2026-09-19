@@ -1,3 +1,4 @@
+import SmartShotCore
 import AppKit
 
 @MainActor
@@ -39,7 +40,7 @@ final class ManualScrollingCaptureHUDController: NSObject {
         panel.isOpaque = false
         panel.animationBehavior = .none
         panel.isReleasedWhenClosed = false
-        panel.setAccessibilityLabel("Manual long capture controls")
+        panel.setAccessibilityLabel(L10n.text("Manual long capture controls"))
 
         let visualEffect = NSVisualEffectView(frame: panel.contentView?.bounds ?? .zero)
         visualEffect.autoresizingMask = [.width, .height]
@@ -58,33 +59,33 @@ final class ManualScrollingCaptureHUDController: NSObject {
         indicator.startAnimation(nil)
         visualEffect.addSubview(indicator)
 
-        let title = NSTextField(labelWithString: "Preparing long capture")
+        let title = NSTextField(labelWithString: L10n.text("Preparing long capture"))
         title.translatesAutoresizingMaskIntoConstraints = false
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         title.textColor = .labelColor
         title.lineBreakMode = .byTruncatingTail
         visualEffect.addSubview(title)
 
-        let detail = NSTextField(labelWithString: "Hold the region still")
+        let detail = NSTextField(labelWithString: L10n.text("Hold the region still"))
         detail.translatesAutoresizingMaskIntoConstraints = false
         detail.font = .systemFont(ofSize: 11)
         detail.textColor = .secondaryLabelColor
         detail.lineBreakMode = .byTruncatingTail
         visualEffect.addSubview(detail)
 
-        let done = NSButton(title: "Done", target: self, action: #selector(finishCapture))
+        let done = NSButton(title: L10n.text("Done"), target: self, action: #selector(finishCapture))
         done.translatesAutoresizingMaskIntoConstraints = false
         done.bezelStyle = .rounded
         done.keyEquivalent = "\r"
         done.isEnabled = false
-        done.setAccessibilityHelp("Finish and stitch the captured sections")
+        done.setAccessibilityHelp(L10n.text("Finish and stitch the captured sections"))
         visualEffect.addSubview(done)
 
-        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelCapture))
+        let cancel = NSButton(title: L10n.text("Cancel"), target: self, action: #selector(cancelCapture))
         cancel.translatesAutoresizingMaskIntoConstraints = false
         cancel.bezelStyle = .rounded
         cancel.keyEquivalent = "\u{1b}"
-        cancel.setAccessibilityHelp("Cancel manual long capture")
+        cancel.setAccessibilityHelp(L10n.text("Cancel manual long capture"))
         visualEffect.addSubview(cancel)
 
         NSLayoutConstraint.activate([
@@ -114,32 +115,32 @@ final class ManualScrollingCaptureHUDController: NSObject {
         doneButton = done
         cancellationRequested = false
         installEscapeHotKey()
-        setDetail("Hold the region still")
+        setDetail(L10n.text("Hold the region still"))
     }
 
     func update(_ progress: ManualScrollingCaptureProgress) {
         switch progress.phase {
         case .preparing:
-            titleLabel?.stringValue = "Preparing long capture"
-            setDetail(detail("Hold the region still", progress: progress))
+            titleLabel?.stringValue = L10n.text("Preparing long capture")
+            setDetail(detail(L10n.text("Hold the region still"), progress: progress))
             activityIndicator?.startAnimation(nil)
             doneButton?.isEnabled = false
         case .ready:
-            titleLabel?.stringValue = "Long capture ready"
-            setDetail(detail("Scroll down and pause", progress: progress))
+            titleLabel?.stringValue = L10n.text("Long capture ready")
+            setDetail(detail(L10n.text("Scroll down and pause"), progress: progress))
             activityIndicator?.stopAnimation(nil)
             doneButton?.isEnabled = false
         case .capturing:
-            titleLabel?.stringValue = "\(progress.fragmentCount) sections captured"
+            titleLabel?.stringValue = L10n.format("%@ sections captured", String(describing: progress.fragmentCount))
             setDetail(detail(
-                "\(Int(progress.logicalHeight)) points - continue or finish",
+                L10n.format("%@ points - continue or finish", String(describing: Int(progress.logicalHeight))),
                 progress: progress
             ))
             activityIndicator?.stopAnimation(nil)
             doneButton?.isEnabled = progress.fragmentCount > 1
         case .stitching:
-            titleLabel?.stringValue = "Stitching \(progress.fragmentCount) sections"
-            setDetail("Checking the final image")
+            titleLabel?.stringValue = L10n.format("Stitching %@ sections", String(describing: progress.fragmentCount))
+            setDetail(L10n.text("Checking the final image"))
             activityIndicator?.startAnimation(nil)
             doneButton?.isEnabled = false
         }
@@ -151,7 +152,7 @@ final class ManualScrollingCaptureHUDController: NSObject {
     ) -> String {
         guard let remaining = progress.remainingTimeText else { return message }
         if let seconds = progress.secondsRemaining, seconds <= 30 {
-            return "Finish soon - \(remaining)"
+            return L10n.format("Finish soon - %@", String(describing: remaining))
         }
         return "\(message) - \(remaining)"
     }
@@ -170,7 +171,7 @@ final class ManualScrollingCaptureHUDController: NSObject {
     @objc private func finishCapture() {
         doneButton?.isEnabled = false
         activityIndicator?.startAnimation(nil)
-        setDetail("Finishing the current section")
+        setDetail(L10n.text("Finishing the current section"))
         onFinish?()
     }
 

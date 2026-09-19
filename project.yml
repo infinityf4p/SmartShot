@@ -37,6 +37,8 @@ targets:
       - Sources/SmartShotCommand
       - path: Resources/Assets.xcassets
         buildPhase: resources
+      - path: Resources/Localizations
+        buildPhase: resources
     dependencies:
       - target: SmartShotCore
       - target: SmartShotSafariExtension

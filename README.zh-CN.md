@@ -43,6 +43,8 @@ macOS 14+ · Swift 6 · 预览版
 
 原生截图的初始快捷键为 `Control-Shift-2`。如果与其他应用冲突，以 SmartShot 显示的快捷键为准，也可以在 Settings 中修改。
 
+应用默认使用英文。在 **Settings > General > Language** 中选择 **简体中文**，退出并重新打开 SmartShot 后生效。语言选择会保存；切回英文时，在 **设置 > 通用 > 语言** 中选择 **English**，然后重启应用。
+
 ## 本地构建
 
 需要 macOS 14+、支持 Swift 6 的 Xcode、[XcodeGen](https://github.com/yonaskolb/XcodeGen)，以及用于浏览器测试的 Node.js。当前代码已在 Apple Silicon 和 Xcode 26.6 环境下测试。

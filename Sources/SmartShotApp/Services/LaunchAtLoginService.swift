@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import ServiceManagement
+import SmartShotCore
 
 @MainActor
 protocol LoginItemManaging {
@@ -67,7 +68,9 @@ final class LaunchAtLoginService: ObservableObject {
                 try loginItem.unregister()
             }
         } catch {
-            errorMessage = "Could not \(enabled ? "enable" : "disable") launch at login: \(error.localizedDescription)"
+            errorMessage = enabled
+                ? L10n.format("Could not enable launch at login: %@", error.localizedDescription)
+                : L10n.format("Could not disable launch at login: %@", error.localizedDescription)
         }
     }
 

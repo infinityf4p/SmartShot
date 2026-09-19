@@ -1,3 +1,4 @@
+import SmartShotCore
 import AppKit
 
 @MainActor
@@ -35,7 +36,7 @@ final class ScreenRecordingHUDController {
         panel.hasShadow = true
         panel.animationBehavior = .none
         panel.isReleasedWhenClosed = false
-        panel.setAccessibilityLabel("Screen recording controls")
+        panel.setAccessibilityLabel(L10n.text("Screen recording controls"))
 
         let effect = NSVisualEffectView(frame: CGRect(origin: .zero, size: size))
         effect.autoresizingMask = [.width, .height]
@@ -58,19 +59,19 @@ final class ScreenRecordingHUDController {
         duration.translatesAutoresizingMaskIntoConstraints = false
         duration.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium)
         duration.alignment = .left
-        duration.setAccessibilityLabel("Recording duration")
-        duration.setAccessibilityValue("0 seconds")
+        duration.setAccessibilityLabel(L10n.text("Recording duration"))
+        duration.setAccessibilityValue(L10n.text("0 seconds"))
 
         let stop = symbolButton(
             symbol: "stop.fill",
-            accessibilityLabel: "Stop recording",
-            toolTip: "Stop and save recording",
+            accessibilityLabel: L10n.text("Stop recording"),
+            toolTip: L10n.text("Stop and save recording"),
             action: #selector(stopRecording)
         )
         let cancel = symbolButton(
             symbol: "xmark",
-            accessibilityLabel: "Cancel recording",
-            toolTip: "Cancel and discard recording",
+            accessibilityLabel: L10n.text("Cancel recording"),
+            toolTip: L10n.text("Cancel and discard recording"),
             action: #selector(cancelRecording)
         )
 
@@ -150,7 +151,7 @@ final class ScreenRecordingHUDController {
         let minutes = elapsed / 60
         let seconds = elapsed % 60
         durationLabel?.stringValue = String(format: "%02d:%02d", minutes, seconds)
-        durationLabel?.setAccessibilityValue("\(elapsed) seconds")
+        durationLabel?.setAccessibilityValue(L10n.format("%@ seconds", String(describing: elapsed)))
     }
 
     @objc private func stopRecording() {

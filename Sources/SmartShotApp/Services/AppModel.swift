@@ -41,7 +41,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
     @Published private(set) var shortcutRegistration: GlobalShortcutMonitor.Registration = .inactive
     @Published private(set) var shortcutFeedback: String?
     @Published private(set) var shortcutFeedbackIsError = false
-    @Published private(set) var chromiumIntegrationStatus = "Checking browser integration..."
+    @Published private(set) var chromiumIntegrationStatus = L10n.text("Checking browser integration...")
     @Published private(set) var chromiumIntegrationIsReady = false
     @Published private(set) var chromiumIntegrationIsBusy = false
     @Published private(set) var chromiumIntegrationHasError = false
@@ -314,18 +314,18 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         case .idle, .finished, .cancelled:
             nil
         case .preparing:
-            "Preparing screen recording"
+            L10n.text("Preparing screen recording")
         case .recording:
-            "Recording screen"
+            L10n.text("Recording screen")
         case .stopping:
-            "Finalizing MP4"
+            L10n.text("Finalizing MP4")
         case let .failed(_, message):
             message
         }
     }
 
     var defaultSaveDirectoryDisplayName: String {
-        guard !defaultSaveDirectoryPath.isEmpty else { return "Not set" }
+        guard !defaultSaveDirectoryPath.isEmpty else { return L10n.text("Not set") }
         return (defaultSaveDirectoryPath as NSString).abbreviatingWithTildeInPath
     }
 
@@ -371,15 +371,15 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
     var shortcutDetail: String {
         switch shortcutRegistration {
         case .inactive:
-            "Starting..."
+            L10n.text("Starting...")
         case let .registered(shortcut):
             shortcut == .fallbackCapture
-                ? "Using \(shortcut.displayName) because the default was busy"
+                ? L10n.format("Using %@ because the default was busy", String(describing: shortcut.displayName))
                 : shortcut.displayName
         case let .conflict(shortcut):
-            "\(shortcut.displayName) is currently in use"
+            L10n.format("%@ is currently in use", String(describing: shortcut.displayName))
         case let .failed(_, status):
-            "Registration failed (error \(status))"
+            L10n.format("Registration failed (error %@)", String(describing: status))
         }
     }
 
@@ -664,18 +664,18 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         switch shortcutMonitor.update(to: shortcut) {
         case let .updated(value):
             shortcutRegistration = shortcutMonitor.registration
-            setShortcutFeedback("Capture shortcut changed to \(value.displayName).", isError: false)
+            setShortcutFeedback(L10n.format("Capture shortcut changed to %@.", String(describing: value.displayName)), isError: false)
         case let .unchanged(value):
             shortcutRegistration = shortcutMonitor.registration
-            setShortcutFeedback("\(value.displayName) is already the capture shortcut.", isError: false)
+            setShortcutFeedback(L10n.format("%@ is already the capture shortcut.", String(describing: value.displayName)), isError: false)
         case let .conflict(value):
-            setShortcutFeedback("\(value.displayName) is already registered. The current shortcut is unchanged.", isError: true)
+            setShortcutFeedback(L10n.format("%@ is already registered. The current shortcut is unchanged.", String(describing: value.displayName)), isError: true)
         case let .invalid(error):
             setShortcutFeedback(error.localizedDescription, isError: true)
         case let .failed(_, status):
-            setShortcutFeedback("The shortcut could not be registered (error \(status)). The current shortcut is unchanged.", isError: true)
+            setShortcutFeedback(L10n.format("The shortcut could not be registered (error %@). The current shortcut is unchanged.", String(describing: status)), isError: true)
         case .persistenceFailed:
-            setShortcutFeedback("The shortcut could not be saved. The current shortcut is unchanged.", isError: true)
+            setShortcutFeedback(L10n.text("The shortcut could not be saved. The current shortcut is unchanged."), isError: true)
         }
     }
 
@@ -772,7 +772,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
                 return
             } catch {
                 safariExtensionStatus = .unavailable(
-                    "Could not open Safari extension settings: \(error.localizedDescription)"
+                    L10n.format("Could not open Safari extension settings: %@", String(describing: error.localizedDescription))
                 )
             }
         }
@@ -782,7 +782,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         guard chromiumIntegrationTask == nil else { return }
         chromiumIntegrationIsBusy = true
         chromiumIntegrationHasError = false
-        chromiumIntegrationStatus = "Installing browser connector..."
+        chromiumIntegrationStatus = L10n.text("Installing browser connector...")
         let appURL = Bundle.main.bundleURL
         let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
         chromiumIntegrationTask = Task { @MainActor [weak self] in
@@ -808,7 +808,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
                 applyChromiumIntegrationStatus(status)
             } else {
                 chromiumIntegrationStatus = outcome.errorMessage
-                    ?? "The browser connector could not be installed."
+                    ?? L10n.text("The browser connector could not be installed.")
                 chromiumIntegrationIsReady = false
                 chromiumIntegrationHasError = true
             }
@@ -819,7 +819,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
 
     func revealChromiumExtension() {
         guard let pluginsURL = Bundle.main.builtInPlugInsURL else {
-            chromiumIntegrationStatus = "The embedded browser extension could not be found."
+            chromiumIntegrationStatus = L10n.text("The embedded browser extension could not be found.")
             chromiumIntegrationHasError = true
             return
         }
@@ -829,7 +829,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
             .appendingPathComponent("Resources", isDirectory: true)
             .appendingPathComponent("manifest.json")
         guard FileManager.default.fileExists(atPath: manifestURL.path) else {
-            chromiumIntegrationStatus = "The embedded browser extension could not be found."
+            chromiumIntegrationStatus = L10n.text("The embedded browser extension could not be found.")
             chromiumIntegrationHasError = true
             return
         }
@@ -1102,19 +1102,19 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         chromiumIntegrationIsReady = status.isFullyConfigured
         chromiumIntegrationHasError = false
         if !status.isInstalledApplication {
-            chromiumIntegrationStatus = "Install SmartShot in /Applications to enable the Chromium connector."
+            chromiumIntegrationStatus = L10n.text("Install SmartShot in /Applications to enable the Chromium connector.")
         } else if !status.isHelperAvailable {
-            chromiumIntegrationStatus = "The browser connector is missing from this SmartShot build."
+            chromiumIntegrationStatus = L10n.text("The browser connector is missing from this SmartShot build.")
             chromiumIntegrationHasError = true
         } else if status.detectedBrowsers.isEmpty {
-            chromiumIntegrationStatus = "No supported Chromium browser was detected."
+            chromiumIntegrationStatus = L10n.text("No supported Chromium browser was detected.")
         } else if status.isFullyConfigured {
-            chromiumIntegrationStatus = "Connected: \(status.configuredBrowsers.joined(separator: ", "))."
+            chromiumIntegrationStatus = L10n.format("Connected: %@.", String(describing: status.configuredBrowsers.joined(separator: ", ")))
         } else {
             let pending = status.detectedBrowsers.filter {
                 !status.configuredBrowsers.contains($0)
             }
-            chromiumIntegrationStatus = "Connector available for: \(pending.joined(separator: ", "))."
+            chromiumIntegrationStatus = L10n.format("Connector available for: %@.", String(describing: pending.joined(separator: ", ")))
         }
     }
 
@@ -1140,7 +1140,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
             } catch {
                 browserCaptureImportService.finalize(request, accepted: false)
                 if !isTerminationPending, !isBusy {
-                    state = .failed(error.localizedDescription)
+                    state = .failed(L10n.text(error.localizedDescription))
                     bringMainWindowForward()
                 }
             }
@@ -1160,7 +1160,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         guard !isBusy else { return }
         permissions.refresh()
         guard permissions.hasScreenCaptureAccess else {
-            state = .failed("Allow Screen Recording access, then return and try again.")
+            state = .failed(L10n.text("Allow Screen Recording access, then return and try again."))
             bringMainWindowForward()
             permissions.requestScreenCaptureIfNeeded()
             return
@@ -1179,13 +1179,13 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         guard !isBusy else { return }
         permissions.refresh()
         guard permissions.hasScreenCaptureAccess else {
-            state = .failed("Allow Screen Recording access, then return and try again.")
+            state = .failed(L10n.text("Allow Screen Recording access, then return and try again."))
             bringMainWindowForward()
             permissions.requestScreenCaptureIfNeeded()
             return
         }
         guard permissions.hasAccessibilityAccess else {
-            state = .failed("Allow Accessibility access to select and control a scroll area.")
+            state = .failed(L10n.text("Allow Accessibility access to select and control a scroll area."))
             bringMainWindowForward()
             permissions.requestAccessibilityIfNeeded()
             return
@@ -1220,13 +1220,13 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         guard !isBusy else { return false }
         permissions.refresh()
         guard permissions.hasScreenCaptureAccess else {
-            state = .failed("Allow Screen Recording access, then return and try again.")
+            state = .failed(L10n.text("Allow Screen Recording access, then return and try again."))
             bringMainWindowForward()
             permissions.requestScreenCaptureIfNeeded()
             return false
         }
         guard !recordingCapturesMicrophone || permissions.hasMicrophoneAccess else {
-            state = .failed("Allow Microphone access, then return and start the recording again.")
+            state = .failed(L10n.text("Allow Microphone access, then return and start the recording again."))
             bringMainWindowForward()
             permissions.requestMicrophoneIfNeeded()
             return false
@@ -1468,7 +1468,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
                     completeScreenRecording(artifact)
                 } catch {
                     handleScreenRecordingFailure(error)
-                    lastOutputStatus = "Recording remains in temporary storage. Use Save As to keep it."
+                    lastOutputStatus = L10n.text("Recording remains in temporary storage. Use Save As to keep it.")
                 }
             } catch {
                 handleScreenRecordingFailure(error)
@@ -1508,7 +1508,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         activeRecordingRect = nil
         state = .idle
         countdownHUD.hide()
-        lastOutputStatus = "Saved \(artifact.fileURL.lastPathComponent)"
+        lastOutputStatus = L10n.format("Saved %@", String(describing: artifact.fileURL.lastPathComponent))
         if !isTerminationPending,
            activeCaptureOrigin == .mainWindow || showsPreviewAfterExternalCapture {
             bringMainWindowForward()
@@ -1686,7 +1686,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
             guard let capture = try captureForOutput() else { return }
             latestSmartShotPasteboardChangeCount = copy(capture)
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(L10n.text(error.localizedDescription))
         }
     }
 
@@ -1707,7 +1707,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
     func quickSaveLatest() {
         do {
             guard let capture = try captureForOutput() else {
-                state = .failed("There is no screenshot to save.")
+                state = .failed(L10n.text("There is no screenshot to save."))
                 bringMainWindowForward()
                 return
             }
@@ -1732,10 +1732,10 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
                 format: outputFormat
             )
             try data.write(to: url, options: .atomic)
-            lastOutputStatus = "Saved \(url.lastPathComponent)"
+            lastOutputStatus = L10n.format("Saved %@", String(describing: url.lastPathComponent))
             indexCurrentHistoryFilename(url.lastPathComponent)
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(L10n.text(error.localizedDescription))
         }
     }
 
@@ -1749,7 +1749,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
             pinnedCaptures.append(controller)
             controller.show()
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(L10n.text(error.localizedDescription))
         }
     }
 
@@ -1789,9 +1789,9 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
                 )
                 selectedHistoryID = id
             }
-            lastOutputStatus = "Edits flattened"
+            lastOutputStatus = L10n.text("Edits flattened")
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(L10n.text(error.localizedDescription))
         }
     }
 
@@ -1820,10 +1820,10 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
                 format: outputFormat
             )
             try data.write(to: url, options: .atomic)
-            lastOutputStatus = "Saved \(url.lastPathComponent)"
+            lastOutputStatus = L10n.format("Saved %@", String(describing: url.lastPathComponent))
             indexCurrentHistoryFilename(url.lastPathComponent)
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(L10n.text(error.localizedDescription))
         }
     }
 
@@ -1842,7 +1842,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         if pasteboard.writeObjects([url as NSURL]) {
-            lastOutputStatus = "Copied recording file"
+            lastOutputStatus = L10n.text("Copied recording file")
         }
     }
 
@@ -1861,9 +1861,9 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
                 sourceURL: source,
                 destinationURL: target
             )
-            lastOutputStatus = "Saved \(target.lastPathComponent)"
+            lastOutputStatus = L10n.format("Saved %@", String(describing: target.lastPathComponent))
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(L10n.text(error.localizedDescription))
         }
     }
 
@@ -1898,12 +1898,12 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
                     destinationURL: target
                 )
                 guard let self else { return }
-                lastOutputStatus = "Saved \(target.lastPathComponent)"
+                lastOutputStatus = L10n.format("Saved %@", String(describing: target.lastPathComponent))
             } catch is CancellationError {
                 // The staging file is removed by this task's defer block.
             } catch {
                 guard let self else { return }
-                state = .failed(error.localizedDescription)
+                state = .failed(L10n.text(error.localizedDescription))
             }
         }
     }
@@ -1981,7 +1981,7 @@ final class AppModel: ObservableObject, SelectionOverlayControllerDelegate {
         invalidateDebugManualScrollSession()
         writeDebugCaptureReport(status: "failed", error: error)
 #endif
-        state = .failed(error.localizedDescription)
+        state = .failed(L10n.text(error.localizedDescription))
         scrollingCaptureProgress = nil
         manualScrollingCaptureProgress = nil
         manualScrollingControl = nil

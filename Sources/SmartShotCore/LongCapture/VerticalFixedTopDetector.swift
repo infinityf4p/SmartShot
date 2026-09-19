@@ -52,17 +52,17 @@ public enum VerticalFixedTopDetectionError: Error, Equatable, LocalizedError, Se
     public var errorDescription: String? {
         switch self {
         case .invalidConfiguration:
-            "The fixed-header detector configuration is invalid."
+            L10n.text("The fixed-header detector configuration is invalid.")
         case let .widthMismatch(expected, actual):
-            "The current image is \(actual) pixels wide, but \(expected) pixels were expected."
+            L10n.format("The current image is %@ pixels wide, but %@ pixels were expected.", String(describing: actual), String(describing: expected))
         case let .heightMismatch(expected, actual):
-            "The current image is \(actual) pixels high, but \(expected) pixels were expected."
+            L10n.format("The current image is %@ pixels high, but %@ pixels were expected.", String(describing: actual), String(describing: expected))
         case .dimensionsOverflow:
-            "An input image is too large to inspect."
+            L10n.text("An input image is too large to inspect.")
         case let .pixelLimitExceeded(pixelCount, maximum):
-            "The input contains \(pixelCount) pixels, exceeding the \(maximum)-pixel limit."
+            L10n.format("The input contains %@ pixels, exceeding the %@-pixel limit.", String(describing: pixelCount), String(describing: maximum))
         case let .imageDecodingFailed(index):
-            "Image \(index) could not be decoded."
+            L10n.format("Image %@ could not be decoded.", String(describing: index))
         }
     }
 }

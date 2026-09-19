@@ -1,3 +1,4 @@
+import SmartShotCore
 import AVFoundation
 import AudioToolbox
 import CoreMedia
@@ -83,19 +84,19 @@ final class RecordingAssetWriter: @unchecked Sendable {
             : nil
 
         guard writer.canAdd(videoInput) else {
-            throw ScreenRecordingError.cannotConfigureWriter("H.264 video input is unavailable.")
+            throw ScreenRecordingError.cannotConfigureWriter(L10n.text("H.264 video input is unavailable."))
         }
         writer.add(videoInput)
 
         if let systemAudioInput {
             guard writer.canAdd(systemAudioInput) else {
-                throw ScreenRecordingError.cannotConfigureWriter("System audio input is unavailable.")
+                throw ScreenRecordingError.cannotConfigureWriter(L10n.text("System audio input is unavailable."))
             }
             writer.add(systemAudioInput)
         }
         if let microphoneInput {
             guard writer.canAdd(microphoneInput) else {
-                throw ScreenRecordingError.cannotConfigureWriter("Microphone audio input is unavailable.")
+                throw ScreenRecordingError.cannotConfigureWriter(L10n.text("Microphone audio input is unavailable."))
             }
             writer.add(microphoneInput)
         }
@@ -145,7 +146,7 @@ final class RecordingAssetWriter: @unchecked Sendable {
                         guard writer.status == .completed else {
                             continuation.resume(
                                 throwing: ScreenRecordingError.writerFailed(
-                                    writer.error?.localizedDescription ?? "Unknown encoder failure."
+                                    writer.error?.localizedDescription ?? L10n.text("Unknown encoder failure.")
                                 )
                             )
                             return
@@ -227,7 +228,7 @@ final class RecordingAssetWriter: @unchecked Sendable {
         didReportFailure = true
         failureHandler(
             ScreenRecordingError.writerFailed(
-                error?.localizedDescription ?? "Unknown encoder failure."
+                error?.localizedDescription ?? L10n.text("Unknown encoder failure.")
             )
         )
     }

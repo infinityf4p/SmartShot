@@ -1,0 +1,3 @@
+"NSAccessibilityUsageDescription" = "SmartShot uses accessibility metadata to identify interface blocks under the pointer.";
+"NSMicrophoneUsageDescription" = "SmartShot uses the microphone only when microphone audio is enabled for a screen recording.";
+"NSScreenCaptureUsageDescription" = "SmartShot needs screen access to capture the content you select.";

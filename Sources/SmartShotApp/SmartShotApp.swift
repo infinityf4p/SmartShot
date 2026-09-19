@@ -1,6 +1,15 @@
+import SmartShotCore
 import SwiftUI
 
 @main
+@MainActor
+enum SmartShotMain {
+    static func main() {
+        AppLanguage.prepareForLaunch()
+        SmartShotApp.main()
+    }
+}
+
 struct SmartShotApp: App {
     @NSApplicationDelegateAdaptor(SmartShotApplicationDelegate.self)
     private var applicationDelegate
@@ -9,6 +18,7 @@ struct SmartShotApp: App {
     var body: some Scene {
         Window("SmartShot", id: "main") {
             MainView(model: model)
+                .environment(\.locale, AppLanguage.current.locale)
                 .frame(minWidth: 820, minHeight: 560)
                 .onAppear {
                     applicationDelegate.installTerminationHandler {
@@ -25,33 +35,33 @@ struct SmartShotApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Capture") { model.startCapture(origin: .mainWindow) }
-                Button("Automatic App Scroll (Experimental)") {
+                Button(L10n.text("Capture")) { model.startCapture(origin: .mainWindow) }
+                Button(L10n.text("Automatic App Scroll (Experimental)")) {
                     model.startScrollingCapture(origin: .mainWindow)
                 }
-                Button("Record Region") {
+                Button(L10n.text("Record Region")) {
                     model.startRegionRecording(origin: .mainWindow)
                 }
                 .disabled(model.isBusy)
-                Button("Record Current Display") {
+                Button(L10n.text("Record Current Display")) {
                     model.startDisplayRecording(origin: .mainWindow)
                 }
                 .disabled(model.isBusy)
                 if model.isScreenRecordingWorkflow {
-                    Button("Stop Screen Recording") { model.stopScreenRecording() }
+                    Button(L10n.text("Stop Screen Recording")) { model.stopScreenRecording() }
                         .disabled(!model.canStopScreenRecording)
-                    Button("Cancel Screen Recording") { model.cancelScreenRecording() }
+                    Button(L10n.text("Cancel Screen Recording")) { model.cancelScreenRecording() }
                 }
                 Divider()
-                Button("Copy Latest Capture") { model.copyLatest() }
+                Button(L10n.text("Copy Latest Capture")) { model.copyLatest() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
                     .disabled(model.latestCapture == nil)
-                Button("Pin Latest Capture") { model.pinLatest() }
+                Button(L10n.text("Pin Latest Capture")) { model.pinLatest() }
                     .disabled(model.latestCapture == nil)
-                Button("Save Latest Capture...") { model.saveLatest() }
+                Button(L10n.text("Save Latest Capture...")) { model.saveLatest() }
                     .keyboardShortcut("s", modifiers: [.command, .shift])
                     .disabled(model.latestCapture == nil)
-                Button("Quick Save Latest Capture") { model.quickSaveLatest() }
+                Button(L10n.text("Quick Save Latest Capture")) { model.quickSaveLatest() }
                     .keyboardShortcut("s", modifiers: [.command, .option])
                     .disabled(model.latestCapture == nil)
             }
@@ -59,10 +69,12 @@ struct SmartShotApp: App {
 
         Settings {
             SettingsView(model: model)
+                .environment(\.locale, AppLanguage.current.locale)
         }
 
         MenuBarExtra("SmartShot", systemImage: "viewfinder") {
             MenuBarContent(model: model)
+                .environment(\.locale, AppLanguage.current.locale)
         }
     }
 }
@@ -72,20 +84,20 @@ private struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Button("Capture", systemImage: "viewfinder") {
+        Button(L10n.text("Capture"), systemImage: "viewfinder") {
             model.startCapture(origin: .menuBar)
         }
-        Menu("Record", systemImage: "record.circle") {
-            Button("Region", systemImage: "crop") {
+        Menu(L10n.text("Record"), systemImage: "record.circle") {
+            Button(L10n.text("Region"), systemImage: "crop") {
                 model.startRegionRecording(origin: .menuBar)
             }
-            Button("Current Display", systemImage: "display") {
+            Button(L10n.text("Current Display"), systemImage: "display") {
                 model.startDisplayRecording(origin: .menuBar)
             }
         }
         .disabled(model.isBusy)
         Button(
-            "Automatic App Scroll (Experimental)",
+            L10n.text("Automatic App Scroll (Experimental)"),
             systemImage: AppSymbol.scrollingCapture
         ) {
             model.startScrollingCapture(origin: .menuBar)
@@ -93,62 +105,62 @@ private struct MenuBarContent: View {
         .disabled(model.isBusy)
         if model.isScreenRecordingWorkflow, model.state == .capturing {
             if model.isFinalizingScreenRecording {
-                Text("Finalizing recording...")
+                Text(L10n.text("Finalizing recording..."))
                     .font(.caption)
             } else {
-                Button("Stop Recording", systemImage: "stop.circle.fill") {
+                Button(L10n.text("Stop Recording"), systemImage: "stop.circle.fill") {
                     model.stopScreenRecording()
                 }
                 .disabled(!model.canStopScreenRecording)
-                Button("Cancel Recording", systemImage: "xmark.circle") {
+                Button(L10n.text("Cancel Recording"), systemImage: "xmark.circle") {
                     model.cancelScreenRecording()
                 }
             }
         }
         if model.isScrollingCapture, model.state == .capturing {
             if model.isManualScrollingCapture {
-                Button("Finish Long Capture", systemImage: "checkmark.circle") {
+                Button(L10n.text("Finish Long Capture"), systemImage: "checkmark.circle") {
                     model.finishManualScrollingCapture()
                 }
                 .disabled(!model.canFinishManualScrollingCapture)
             }
-            Button("Cancel Scrolling Capture", systemImage: "stop.circle") {
+            Button(L10n.text("Cancel Scrolling Capture"), systemImage: "stop.circle") {
                 model.cancelCapture()
             }
         }
         if case let .failed(message) = model.state {
             Text(message)
                 .font(.caption)
-            Button("Dismiss Error", systemImage: "xmark.circle") {
+            Button(L10n.text("Dismiss Error"), systemImage: "xmark.circle") {
                 model.clearError()
             }
         }
-        Button("Copy Latest", systemImage: "doc.on.doc") { model.copyLatest() }
+        Button(L10n.text("Copy Latest"), systemImage: "doc.on.doc") { model.copyLatest() }
             .disabled(model.latestCapture == nil)
-        Button("Pin Latest", systemImage: "pin") { model.pinLatest() }
+        Button(L10n.text("Pin Latest"), systemImage: "pin") { model.pinLatest() }
             .disabled(model.latestCapture == nil)
-        Button("Save Latest...", systemImage: "square.and.arrow.down") { model.saveLatest() }
+        Button(L10n.text("Save Latest..."), systemImage: "square.and.arrow.down") { model.saveLatest() }
             .disabled(model.latestCapture == nil)
-        Button("Quick Save", systemImage: "bolt") { model.quickSaveLatest() }
+        Button(L10n.text("Quick Save"), systemImage: "bolt") { model.quickSaveLatest() }
             .disabled(model.latestCapture == nil)
         if model.latestRecording != nil {
-            Button("Reveal Recording", systemImage: "folder") {
+            Button(L10n.text("Reveal Recording"), systemImage: "folder") {
                 model.revealLatestRecording()
             }
-            Button("Export Recording as GIF...", systemImage: "photo.stack") {
+            Button(L10n.text("Export Recording as GIF..."), systemImage: "photo.stack") {
                 model.exportLatestRecordingAsGIF()
             }
             .disabled(model.isExportingRecordingGIF)
         }
         Divider()
         SettingsLink {
-            Label("Settings...", systemImage: "gearshape")
+            Label(L10n.text("Settings..."), systemImage: "gearshape")
         }
-        Button("Open SmartShot", systemImage: "macwindow") {
+        Button(L10n.text("Open SmartShot"), systemImage: "macwindow") {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
-        Button("Quit SmartShot", systemImage: "power") { NSApp.terminate(nil) }
+        Button(L10n.text("Quit SmartShot"), systemImage: "power") { NSApp.terminate(nil) }
     }
 }
 

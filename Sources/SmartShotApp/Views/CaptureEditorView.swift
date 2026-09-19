@@ -48,7 +48,7 @@ private struct ToolbarScrollButton: NSViewRepresentable {
     }
 
     func updateNSView(_ button: NSButton, context: Context) {
-        let label = forward ? "Show more tools" : "Show previous tools"
+        let label = forward ? L10n.text("Show more tools") : L10n.text("Show previous tools")
         // The next hidden tool changes after every scroll, including during a hold.
         context.coordinator.action = action
         button.isEnabled = isEnabled
@@ -56,9 +56,9 @@ private struct ToolbarScrollButton: NSViewRepresentable {
             systemSymbolName: forward ? "chevron.right" : "chevron.left",
             accessibilityDescription: nil
         )
-        button.toolTip = "\(label). Press and hold to scroll."
+        button.toolTip = L10n.format("%@. Press and hold to scroll.", String(describing: label))
         button.setAccessibilityLabel(label)
-        button.setAccessibilityHelp("Press and hold to scroll.")
+        button.setAccessibilityHelp(L10n.text("Press and hold to scroll."))
     }
 
     @MainActor
@@ -155,7 +155,7 @@ struct CaptureEditorView: View {
                 .buttonStyle(.borderless)
                 .keyboardShortcut("z", modifiers: .command)
                 .disabled(!editor.canUndo)
-                .help("Undo")
+                .help(L10n.text("Undo"))
                 .toolbarItem("undo")
 
                 Button(action: editor.redo) {
@@ -165,7 +165,7 @@ struct CaptureEditorView: View {
                 .buttonStyle(.borderless)
                 .keyboardShortcut("z", modifiers: [.command, .shift])
                 .disabled(!editor.canRedo)
-                .help("Redo")
+                .help(L10n.text("Redo"))
                 .toolbarItem("redo")
 
                 Button(action: editor.deleteSelected) {
@@ -175,7 +175,7 @@ struct CaptureEditorView: View {
                 .buttonStyle(.borderless)
                 .keyboardShortcut(.delete, modifiers: [])
                 .disabled(!editor.canDeleteSelection)
-                .help("Delete selected annotation")
+                .help(L10n.text("Delete selected annotation"))
                 .toolbarItem("delete-annotation")
 
                 if editor.currentCrop != .full {
@@ -184,7 +184,7 @@ struct CaptureEditorView: View {
                             .frame(width: 18, height: 18)
                     }
                     .buttonStyle(.borderless)
-                    .help("Restore full image bounds")
+                    .help(L10n.text("Restore full image bounds"))
                     .toolbarItem("restore-crop")
                 }
 
@@ -198,7 +198,7 @@ struct CaptureEditorView: View {
                         .frame(width: 18, height: 18)
                 }
                 .buttonStyle(.borderless)
-                .help("Recognize text")
+                .help(L10n.text("Recognize text"))
                 .popover(isPresented: $showsTextRecognition, arrowEdge: .bottom) {
                     TextRecognitionPanel(editor: editor)
                 }
@@ -210,7 +210,7 @@ struct CaptureEditorView: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(!editor.hasEdits)
-                .help("Reset all edits")
+                .help(L10n.text("Reset all edits"))
                 .toolbarItem("reset-edits")
             }
 
@@ -266,16 +266,16 @@ struct CaptureEditorView: View {
 
                 Slider(value: $editor.lineWidthPoints, in: 1...12, step: 1)
                     .frame(width: 86)
-                    .help("Line width")
-                    .accessibilityLabel("Line width")
+                    .help(L10n.text("Line width"))
+                    .accessibilityLabel(L10n.text("Line width"))
                     .toolbarItem("line-width")
             }
 
             if editor.selectedTool == .text {
-                TextField("Text", text: $editor.textDraft)
+                TextField(L10n.text("Text"), text: $editor.textDraft)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 128)
-                    .accessibilityLabel("Annotation text")
+                    .accessibilityLabel(L10n.text("Annotation text"))
                     .toolbarItem("text-entry")
             }
 
@@ -292,7 +292,7 @@ struct CaptureEditorView: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(zoomScale <= 1)
-                .help("Zoom out")
+                .help(L10n.text("Zoom out"))
                 .toolbarItem("zoom-out")
 
                 Text("\(Int(zoomScale * 100))%")
@@ -309,7 +309,7 @@ struct CaptureEditorView: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(zoomScale >= 4)
-                .help("Zoom in")
+                .help(L10n.text("Zoom in"))
                 .toolbarItem("zoom-in")
             }
         }
@@ -351,31 +351,31 @@ struct CaptureEditorView: View {
 
     private var colorChoices: [(name: String, value: ScreenshotColor)] {
         [
-            ("Red", .red),
-            ("Orange", .orange),
-            ("Yellow", .yellow),
-            ("Green", .green),
-            ("Blue", .blue),
-            ("White", .white),
-            ("Black", .black),
+            (L10n.text("Red"), .red),
+            (L10n.text("Orange"), .orange),
+            (L10n.text("Yellow"), .yellow),
+            (L10n.text("Green"), .green),
+            (L10n.text("Blue"), .blue),
+            (L10n.text("White"), .white),
+            (L10n.text("Black"), .black),
         ]
     }
 
     private func label(for tool: ScreenshotEditingTool) -> String {
         switch tool {
-        case .select: "Select"
-        case .crop: "Crop"
-        case .freehand: "Freehand"
-        case .arrow: "Arrow"
-        case .rectangle: "Rectangle"
-        case .ellipse: "Ellipse"
-        case .text: "Text"
-        case .mosaic: "Mosaic"
-        case .blur: "Blur"
-        case .redaction: "Redact"
-        case .spotlight: "Spotlight"
-        case .magnifier: "Magnifier"
-        case .counter: "Number"
+        case .select: L10n.text("Select")
+        case .crop: L10n.text("Crop")
+        case .freehand: L10n.text("Freehand")
+        case .arrow: L10n.text("Arrow")
+        case .rectangle: L10n.text("Rectangle")
+        case .ellipse: L10n.text("Ellipse")
+        case .text: L10n.text("Text")
+        case .mosaic: L10n.text("Mosaic")
+        case .blur: L10n.text("Blur")
+        case .redaction: L10n.text("Redact")
+        case .spotlight: L10n.text("Spotlight")
+        case .magnifier: L10n.text("Magnifier")
+        case .counter: L10n.text("Number")
         }
     }
 
@@ -419,7 +419,7 @@ private struct TextRecognitionPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Recognized Text")
+                Text(L10n.text("Recognized Text"))
                     .font(.headline)
                 Spacer()
                 Button(action: editor.recognizeText) {
@@ -427,7 +427,7 @@ private struct TextRecognitionPanel: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(editor.isRecognizingText)
-                .help("Recognize again")
+                .help(L10n.text("Recognize again"))
             }
 
             if editor.isRecognizingText {
@@ -435,12 +435,12 @@ private struct TextRecognitionPanel: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = editor.textRecognitionError {
                 ContentUnavailableView(
-                    "Recognition Failed",
+                    L10n.text("Recognition Failed"),
                     systemImage: "exclamationmark.triangle",
                     description: Text(error)
                 )
             } else if editor.recognizedText.isEmpty {
-                ContentUnavailableView("No Text", systemImage: "text.viewfinder")
+                ContentUnavailableView(L10n.text("No Text"), systemImage: "text.viewfinder")
             } else {
                 ScrollView {
                     Text(editor.recognizedText)
@@ -452,17 +452,17 @@ private struct TextRecognitionPanel: View {
 
                 HStack {
                     Button(action: editor.copyRecognizedText) {
-                        Label("Copy", systemImage: "doc.on.doc")
+                        Label(L10n.text("Copy"), systemImage: "doc.on.doc")
                     }
                     Button(action: editor.redactSensitiveText) {
                         Label(
-                            "Sensitive (\(editor.sensitiveTextBlocks.count))",
+                            L10n.format("Sensitive (%@)", String(describing: editor.sensitiveTextBlocks.count)),
                             systemImage: "hand.raised.fill"
                         )
                     }
                     .disabled(editor.sensitiveTextBlocks.isEmpty)
                     Button(action: editor.redactAllRecognizedText) {
-                        Label("All", systemImage: "rectangle.fill")
+                        Label(L10n.text("All"), systemImage: "rectangle.fill")
                     }
                 }
                 .controlSize(.small)
@@ -485,7 +485,7 @@ private struct EditorImageCanvas: View {
                 Image(nsImage: editor.previewImage)
                     .resizable()
                     .frame(width: proxy.size.width, height: proxy.size.height)
-                    .accessibilityLabel("Screenshot editor canvas")
+                    .accessibilityLabel(L10n.text("Screenshot editor canvas"))
 
                 draftOverlay(in: proxy.size)
 

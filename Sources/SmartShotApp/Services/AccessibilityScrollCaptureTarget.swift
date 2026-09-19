@@ -15,17 +15,17 @@ enum AccessibilityScrollTargetError: LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .unavailable:
-            "Accessibility could not inspect the selected application."
+            L10n.text("Accessibility could not inspect the selected application.")
         case .noScrollableArea:
-            "The selected block does not expose a vertical scroll area."
+            L10n.text("The selected block does not expose a vertical scroll area.")
         case .unsupportedScrollBar:
-            "This scroll area cannot be controlled reliably by SmartShot."
+            L10n.text("This scroll area cannot be controlled reliably by SmartShot.")
         case .areaMustBeOnOneDisplay:
-            "Move the entire scroll area onto one display, then try again."
+            L10n.text("Move the entire scroll area onto one display, then try again.")
         case .targetChanged:
-            "The selected scroll area moved or changed during capture."
+            L10n.text("The selected scroll area moved or changed during capture.")
         case let .scrollFailed(error):
-            "The application rejected a scroll request (AX error \(error.rawValue))."
+            L10n.format("The application rejected a scroll request (AX error %@).", String(describing: error.rawValue))
         }
     }
 }

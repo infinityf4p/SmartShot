@@ -16,21 +16,21 @@ enum ScrollingCaptureError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .timedOut:
-            "Scrolling capture took too long. The original scroll position was restored."
+            L10n.text("Scrolling capture took too long. The original scroll position was restored.")
         case .frameLimitReached:
-            "This scroll area needs more than 24 images. Try a shorter area."
+            L10n.text("This scroll area needs more than 24 images. Try a shorter area.")
         case .outputTooLarge:
-            "The completed image would exceed SmartShot's safe size limit."
+            L10n.text("The completed image would exceed SmartShot's safe size limit.")
         case .contentDidNotMove:
-            "This application did not expose reliable scrolling progress."
+            L10n.text("This application did not expose reliable scrolling progress.")
         case .contentChanged:
-            "The content changed while it was being captured. Try again after it becomes still."
+            L10n.text("The content changed while it was being captured. Try again after it becomes still.")
         case .unreliableOverlap:
-            "SmartShot could not verify a clean overlap between two sections."
+            L10n.text("SmartShot could not verify a clean overlap between two sections.")
         case .couldNotReachEnd:
-            "SmartShot could not verify the end of this scroll area."
+            L10n.text("SmartShot could not verify the end of this scroll area.")
         case .restoreFailed:
-            "The screenshot stopped, but the application's original scroll position could not be restored."
+            L10n.text("The screenshot stopped, but the application's original scroll position could not be restored.")
         }
     }
 }
