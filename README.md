@@ -10,6 +10,8 @@ SmartShot combines smart block selection, region and long screenshots, an image 
 
 macOS 14+ · Swift 6 · Preview releases
 
+![SmartShot main window (v0.2.5)](Docs/Images/main-window.jpg)
+
 ## Features
 
 | Workflow | What you can do |

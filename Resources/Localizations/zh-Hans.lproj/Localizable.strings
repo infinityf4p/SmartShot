@@ -297,7 +297,6 @@
 "Show pointer" = "显示鼠标指针";
 "Show previous tools" = "显示前面的工具";
 "Smart" = "智能";
-"Smart capture, long capture, and recording" = "智能截图、长截图和录屏";
 "SmartShot + time" = "SmartShot + 时间";
 "SmartShot could not configure the microphone: %@" = "SmartShot 无法配置麦克风：%@";
 "SmartShot could not configure the video encoder: %@" = "SmartShot 无法配置视频编码器：%@";

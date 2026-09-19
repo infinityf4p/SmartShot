@@ -10,6 +10,8 @@ SmartShot 将智能选区、区域截图、长截图、图片编辑、本地 OCR
 
 macOS 14+ · Swift 6 · 预览版
 
+![SmartShot 主界面（v0.2.5）](Docs/Images/main-window.jpg)
+
 ## 功能
 
 | 使用场景 | 已实现内容 |

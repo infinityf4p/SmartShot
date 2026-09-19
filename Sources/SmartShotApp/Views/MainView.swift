@@ -99,16 +99,11 @@ struct MainView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                Label("SmartShot", systemImage: "viewfinder")
-                    .font(.title2.weight(.semibold))
-                Text(L10n.text("Smart capture, long capture, and recording"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 22)
-            .padding(.bottom, 20)
+            Label("SmartShot", systemImage: "viewfinder")
+                .font(.title2.weight(.semibold))
+                .padding(.horizontal, 20)
+                .padding(.top, 22)
+                .padding(.bottom, 20)
 
             Divider()
 
