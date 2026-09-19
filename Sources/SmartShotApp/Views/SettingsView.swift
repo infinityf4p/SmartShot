@@ -4,29 +4,44 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var model: AppModel
+    @AppStorage(AppLanguage.preferenceKey) private var language = AppLanguage.english
     @StateObject private var launchAtLogin = LaunchAtLoginService()
     @State private var confirmsHistoryDeletion = false
 
     var body: some View {
         Form {
-            Section("General") {
+            Section(L10n.text("General")) {
+                Picker(L10n.text("Language"), selection: $language) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.title).tag(language)
+                    }
+                }
+                .accessibilityLabel(L10n.text("Interface language"))
+                .onChange(of: language) { _, selection in selection.save() }
+
+                if language != AppLanguage.current {
+                    Text(L10n.text("Restart SmartShot to apply the new language."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Toggle(
-                    "Launch SmartShot at login",
+                    L10n.text("Launch SmartShot at login"),
                     isOn: Binding(
                         get: { launchAtLogin.isEnabled },
                         set: { launchAtLogin.setEnabled($0) }
                     )
                 )
-                Text("Automatically start SmartShot when you log in to your Mac.")
+                Text(L10n.text("Automatically start SmartShot when you log in to your Mac."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 if launchAtLogin.requiresApproval {
-                    Text("Allow SmartShot in System Settings > General > Login Items to enable launch at login.")
+                    Text(L10n.text("Allow SmartShot in System Settings > General > Login Items to enable launch at login."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button("Open Login Items", action: launchAtLogin.openSystemSettings)
+                    Button(L10n.text("Open Login Items"), action: launchAtLogin.openSystemSettings)
                 }
 
                 if let errorMessage = launchAtLogin.errorMessage {
@@ -37,8 +52,8 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Capture Shortcut") {
-                LabeledContent("Global shortcut") {
+            Section(L10n.text("Capture Shortcut")) {
+                LabeledContent(L10n.text("Global shortcut")) {
                     HStack(spacing: 8) {
                         ShortcutRecorder(
                             shortcut: model.configuredShortcut,
@@ -48,12 +63,12 @@ struct SettingsView: View {
                         )
                         .frame(width: 150)
 
-                        Button("Restore Default", action: model.restoreDefaultShortcut)
+                        Button(L10n.text("Restore Default"), action: model.restoreDefaultShortcut)
                     }
                     .accessibilityElement(children: .contain)
                 }
 
-                Text("Click the shortcut field, then press a key with at least two modifiers.")
+                Text(L10n.text("Click the shortcut field, then press a key with at least two modifiers."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -70,106 +85,106 @@ struct SettingsView: View {
                 }
             }
 
-            Section("After Capture") {
-                Picker("Capture delay", selection: $model.captureDelaySeconds) {
-                    Text("Off").tag(0)
-                    Text("3 seconds").tag(3)
-                    Text("5 seconds").tag(5)
+            Section(L10n.text("After Capture")) {
+                Picker(L10n.text("Capture delay"), selection: $model.captureDelaySeconds) {
+                    Text(L10n.text("Off")).tag(0)
+                    Text(L10n.text("3 seconds")).tag(3)
+                    Text(L10n.text("5 seconds")).tag(5)
                 }
                 .pickerStyle(.segmented)
 
-                Toggle("Copy screenshot to the clipboard", isOn: $model.automaticallyCopiesCaptures)
-                Toggle("Show SmartShot after captures started elsewhere", isOn: $model.showsPreviewAfterExternalCapture)
-                Toggle("Private captures skip history and automatic copy", isOn: $model.usesPrivateCaptureMode)
-                Text("Keep preview off to stay in the current app or full-screen Space after a shortcut capture.")
+                Toggle(L10n.text("Copy screenshot to the clipboard"), isOn: $model.automaticallyCopiesCaptures)
+                Toggle(L10n.text("Show SmartShot after captures started elsewhere"), isOn: $model.showsPreviewAfterExternalCapture)
+                Toggle(L10n.text("Private captures skip history and automatic copy"), isOn: $model.usesPrivateCaptureMode)
+                Text(L10n.text("Keep preview off to stay in the current app or full-screen Space after a shortcut capture."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("History") {
-                Toggle("Save captures to local history", isOn: $model.savesCaptureHistory)
+            Section(L10n.text("History")) {
+                Toggle(L10n.text("Save captures to local history"), isOn: $model.savesCaptureHistory)
                 Toggle(
-                    "Index text recognized with OCR",
+                    L10n.text("Index text recognized with OCR"),
                     isOn: $model.indexesRecognizedTextInHistory
                 )
-                Text("Off by default. Text is indexed only after you run OCR. Turning this off removes stored OCR indexes. Private captures are never indexed.")
+                Text(L10n.text("Off by default. Text is indexed only after you run OCR. Turning this off removes stored OCR indexes. Private captures are never indexed."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Picker("Keep", selection: $model.captureHistoryLimit) {
-                    Text("10 captures").tag(10)
-                    Text("25 captures").tag(25)
-                    Text("50 captures").tag(50)
-                    Text("100 captures").tag(100)
-                    Text("250 captures").tag(250)
+                Picker(L10n.text("Keep"), selection: $model.captureHistoryLimit) {
+                    Text(L10n.text("10 captures")).tag(10)
+                    Text(L10n.text("25 captures")).tag(25)
+                    Text(L10n.text("50 captures")).tag(50)
+                    Text(L10n.text("100 captures")).tag(100)
+                    Text(L10n.text("250 captures")).tag(250)
                 }
-                Button("Clear History...", role: .destructive) {
+                Button(L10n.text("Clear History..."), role: .destructive) {
                     confirmsHistoryDeletion = true
                 }
                 .disabled(!model.hasCaptureHistory)
             }
 
-            Section("Output") {
-                Picker("Format", selection: $model.outputFormat) {
+            Section(L10n.text("Output")) {
+                Picker(L10n.text("Format"), selection: $model.outputFormat) {
                     ForEach(CaptureOutputFormat.allCases) { format in
                         Text(format.title).tag(format)
                     }
                 }
                 .pickerStyle(.segmented)
 
-                Picker("Filename", selection: $model.filenameStyle) {
+                Picker(L10n.text("Filename"), selection: $model.filenameStyle) {
                     ForEach(CaptureFilenameStyle.allCases) { style in
                         Text(style.title).tag(style)
                     }
                 }
 
-                LabeledContent("Quick Save folder") {
+                LabeledContent(L10n.text("Quick Save folder")) {
                     HStack(spacing: 8) {
                         Text(model.defaultSaveDirectoryDisplayName)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .frame(maxWidth: 240, alignment: .trailing)
-                        Button("Choose...", action: model.chooseDefaultSaveDirectory)
+                        Button(L10n.text("Choose..."), action: model.chooseDefaultSaveDirectory)
                     }
                 }
             }
 
-            Section("Screen Recording") {
-                Toggle("Capture system audio", isOn: $model.recordingCapturesSystemAudio)
-                Toggle("Capture microphone", isOn: $model.recordingCapturesMicrophone)
-                Toggle("Show pointer", isOn: $model.recordingShowsCursor)
+            Section(L10n.text("Screen Recording")) {
+                Toggle(L10n.text("Capture system audio"), isOn: $model.recordingCapturesSystemAudio)
+                Toggle(L10n.text("Capture microphone"), isOn: $model.recordingCapturesMicrophone)
+                Toggle(L10n.text("Show pointer"), isOn: $model.recordingShowsCursor)
 
-                Picker("Frame rate", selection: $model.recordingFrameRate) {
-                    Text("15 fps").tag(15)
-                    Text("30 fps").tag(30)
-                    Text("60 fps").tag(60)
+                Picker(L10n.text("Frame rate"), selection: $model.recordingFrameRate) {
+                    Text(L10n.text("15 fps")).tag(15)
+                    Text(L10n.text("30 fps")).tag(30)
+                    Text(L10n.text("60 fps")).tag(60)
                 }
                 .pickerStyle(.segmented)
 
-                Picker("Maximum edge", selection: $model.recordingMaximumLongEdge) {
-                    Text("1920 px").tag(1_920)
-                    Text("2560 px").tag(2_560)
-                    Text("3840 px").tag(3_840)
+                Picker(L10n.text("Maximum edge"), selection: $model.recordingMaximumLongEdge) {
+                    Text(L10n.text("1920 px")).tag(1_920)
+                    Text(L10n.text("2560 px")).tag(2_560)
+                    Text(L10n.text("3840 px")).tag(3_840)
                 }
                 .pickerStyle(.segmented)
 
-                Text("Recordings are saved as H.264/AAC MP4 files in the Quick Save folder. GIF export is limited to 30 seconds, 15 fps, and 1280 px.")
+                Text(L10n.text("Recordings are saved as H.264/AAC MP4 files in the Quick Save folder. GIF export is limited to 30 seconds, 15 fps, and 1280 px."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("Browser Integration") {
-                LabeledContent("Safari extension") {
+            Section(L10n.text("Browser Integration")) {
+                LabeledContent(L10n.text("Safari extension")) {
                     HStack(spacing: 8) {
                         Button(
-                            "Open Safari Settings",
+                            L10n.text("Open Safari Settings"),
                             action: model.openSafariExtensionPreferences
                         )
-                        .accessibilityLabel("Open SmartShot Safari extension settings")
+                        .accessibilityLabel(L10n.text("Open SmartShot Safari extension settings"))
                         .disabled(model.safariExtensionIsBusy)
                         Button(action: model.refreshSafariExtensionStatus) {
-                            Label("Refresh", systemImage: "arrow.clockwise")
+                            Label(L10n.text("Refresh"), systemImage: "arrow.clockwise")
                         }
-                        .accessibilityLabel("Refresh Safari extension status")
+                        .accessibilityLabel(L10n.text("Refresh Safari extension status"))
                         .disabled(model.safariExtensionIsBusy)
                     }
                     .accessibilityElement(children: .contain)
@@ -188,13 +203,13 @@ struct SettingsView: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
 
-                LabeledContent("Chromium connector") {
+                LabeledContent(L10n.text("Chromium connector")) {
                     HStack(spacing: 8) {
-                        Button("Install", action: model.installChromiumIntegration)
-                            .accessibilityLabel("Install Chromium connector")
+                        Button(L10n.text("Install"), action: model.installChromiumIntegration)
+                            .accessibilityLabel(L10n.text("Install Chromium connector"))
                             .disabled(model.chromiumIntegrationIsBusy || model.chromiumIntegrationIsReady)
-                        Button("Reveal Extension", action: model.revealChromiumExtension)
-                            .accessibilityLabel("Reveal SmartShot browser extension")
+                        Button(L10n.text("Reveal Extension"), action: model.revealChromiumExtension)
+                            .accessibilityLabel(L10n.text("Reveal SmartShot browser extension"))
                     }
                     .accessibilityElement(children: .contain)
                 }
@@ -213,17 +228,17 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
 
-            Section("Permissions") {
-                LabeledContent("Screen Recording") {
-                    Button("Open Settings", action: model.permissions.openScreenCaptureSettings)
+            Section(L10n.text("Permissions")) {
+                LabeledContent(L10n.text("Screen Recording")) {
+                    Button(L10n.text("Open Settings"), action: model.permissions.openScreenCaptureSettings)
                 }
-                LabeledContent("Accessibility") {
-                    Button("Open Settings", action: model.permissions.openAccessibilitySettings)
+                LabeledContent(L10n.text("Accessibility")) {
+                    Button(L10n.text("Open Settings"), action: model.permissions.openAccessibilitySettings)
                 }
-                LabeledContent("Microphone") {
+                LabeledContent(L10n.text("Microphone")) {
                     HStack(spacing: 8) {
                         Label(
-                            model.permissions.hasMicrophoneAccess ? "Allowed" : "Not allowed",
+                            model.permissions.hasMicrophoneAccess ? L10n.text("Allowed") : L10n.text("Not allowed"),
                             systemImage: model.permissions.hasMicrophoneAccess
                                 ? "checkmark.circle.fill"
                                 : "circle"
@@ -249,12 +264,12 @@ struct SettingsView: View {
             model.endShortcutRecording()
         }
         .confirmationDialog(
-            "Delete all screenshot history?",
+            L10n.text("Delete all screenshot history?"),
             isPresented: $confirmsHistoryDeletion
         ) {
-            Button("Delete All History", role: .destructive, action: model.clearCaptureHistory)
+            Button(L10n.text("Delete All History"), role: .destructive, action: model.clearCaptureHistory)
         } message: {
-            Text("This removes SmartShot's local history files. This cannot be undone.")
+            Text(L10n.text("This removes SmartShot's local history files. This cannot be undone."))
         }
     }
 }

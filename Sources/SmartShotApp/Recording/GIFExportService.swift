@@ -1,3 +1,4 @@
+import SmartShotCore
 import AVFoundation
 import CoreGraphics
 import CoreMedia
@@ -80,15 +81,15 @@ enum GIFExportError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidVideoDuration:
-            "The selected video has no GIF-exportable frames."
+            L10n.text("The selected video has no GIF-exportable frames.")
         case .destinationExists:
-            "The GIF destination already exists."
+            L10n.text("The GIF destination already exists.")
         case .cannotCreateDestination:
-            "SmartShot could not create the GIF destination."
+            L10n.text("SmartShot could not create the GIF destination.")
         case let .frameGenerationFailed(message):
-            "SmartShot could not decode a GIF frame: \(message)"
+            L10n.format("SmartShot could not decode a GIF frame: %@", String(describing: message))
         case .encodingFailed:
-            "SmartShot could not finish encoding the GIF."
+            L10n.text("SmartShot could not finish encoding the GIF.")
         }
     }
 }
@@ -185,7 +186,7 @@ enum GIFExportService {
                         guard let image else {
                             continuation.resume(
                                 throwing: GIFExportError.frameGenerationFailed(
-                                    "The decoder returned an empty image."
+                                    L10n.text("The decoder returned an empty image.")
                                 )
                             )
                             return
@@ -196,13 +197,13 @@ enum GIFExportService {
                     case .failed:
                         continuation.resume(
                             throwing: GIFExportError.frameGenerationFailed(
-                                error?.localizedDescription ?? "Unknown frame decoder failure."
+                                error?.localizedDescription ?? L10n.text("Unknown frame decoder failure.")
                             )
                         )
                     @unknown default:
                         continuation.resume(
                             throwing: GIFExportError.frameGenerationFailed(
-                                "Unknown frame decoder result."
+                                L10n.text("Unknown frame decoder result.")
                             )
                         )
                     }

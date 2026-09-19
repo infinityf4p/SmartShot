@@ -1,3 +1,4 @@
+import SmartShotCore
 import AppKit
 
 @MainActor
@@ -38,7 +39,7 @@ final class PinnedCaptureWindowController: NSObject, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.minSize = CGSize(width: 180, height: 120)
         panel.delegate = self
-        panel.setAccessibilityLabel("Pinned screenshot")
+        panel.setAccessibilityLabel(L10n.text("Pinned screenshot"))
 
         let scrollView = NSScrollView(frame: panel.contentView?.bounds ?? .zero)
         scrollView.autoresizingMask = [.width, .height]
@@ -59,7 +60,7 @@ final class PinnedCaptureWindowController: NSObject, NSWindowDelegate {
         imageView.image = capture.image
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.imageAlignment = .alignCenter
-        imageView.setAccessibilityLabel("Pinned screenshot image")
+        imageView.setAccessibilityLabel(L10n.text("Pinned screenshot image"))
         scrollView.documentView = imageView
         scrollView.contentView.scroll(
             to: CGPoint(x: 0, y: max(0, documentSize.height - viewportHeight))

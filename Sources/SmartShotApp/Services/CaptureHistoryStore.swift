@@ -1,3 +1,4 @@
+import SmartShotCore
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -96,11 +97,11 @@ enum CaptureHistoryStoreError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidCapture:
-            "The screenshot could not be added to history."
+            L10n.text("The screenshot could not be added to history.")
         case .missingCapture:
-            "The history item is no longer available."
+            L10n.text("The history item is no longer available.")
         case .thumbnailEncodingFailed:
-            "The screenshot thumbnail could not be created."
+            L10n.text("The screenshot thumbnail could not be created.")
         }
     }
 }

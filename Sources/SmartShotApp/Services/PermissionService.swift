@@ -1,3 +1,4 @@
+import SmartShotCore
 import AppKit
 import ApplicationServices
 import AVFoundation
@@ -54,15 +55,15 @@ final class PermissionService: ObservableObject {
     }
 
     var screenCaptureActionTitle: String {
-        hasScreenCaptureAccess ? "Settings" : "Allow"
+        hasScreenCaptureAccess ? L10n.text("Settings") : L10n.text("Allow")
     }
 
     var accessibilityActionTitle: String {
-        hasAccessibilityAccess ? "Settings" : "Allow"
+        hasAccessibilityAccess ? L10n.text("Settings") : L10n.text("Allow")
     }
 
     var microphoneActionTitle: String {
-        microphoneAuthorizationStatus == .notDetermined ? "Allow" : "Settings"
+        microphoneAuthorizationStatus == .notDetermined ? L10n.text("Allow") : L10n.text("Settings")
     }
 
     func refresh() {

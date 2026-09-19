@@ -1,3 +1,4 @@
+import SmartShotCore
 import Foundation
 import ObjectiveC.runtime
 import SafariServices
@@ -13,11 +14,11 @@ enum SafariExtensionIntegrationStatus: Equatable, Sendable {
         if let errorDescription {
             let detail = errorDescription.trimmingCharacters(in: .whitespacesAndNewlines)
             return .unavailable(
-                "Could not read Safari extension status: \(detail.isEmpty ? "Unknown error." : detail)"
+                L10n.format("Could not read Safari extension status: %@", String(describing: detail.isEmpty ? L10n.text("Unknown error.") : detail))
             )
         }
         guard let isEnabled else {
-            return .unavailable("Safari did not return the extension state.")
+            return .unavailable(L10n.text("Safari did not return the extension state."))
         }
         return isEnabled ? .enabled : .disabled
     }
@@ -25,13 +26,13 @@ enum SafariExtensionIntegrationStatus: Equatable, Sendable {
     var message: String {
         switch self {
         case .checking:
-            "Checking Safari extension..."
+            L10n.text("Checking Safari extension...")
         case .enabled:
-            "Safari extension is enabled."
+            L10n.text("Safari extension is enabled.")
         case .disabled:
-            "Safari extension is off. Enable SmartShot Web Selector in Safari Settings. Local development requires Apple signing or Sign to Run Locally."
+            L10n.text("Safari extension is off. Enable SmartShot Web Selector in Safari Settings. Local development requires Apple signing or Sign to Run Locally.")
         case .preferencesOpened:
-            "Safari Extensions settings opened. Enable SmartShot Web Selector, then click Refresh. If it is not listed, use Apple signing or Sign to Run Locally."
+            L10n.text("Safari Extensions settings opened. Enable SmartShot Web Selector, then click Refresh. If it is not listed, use Apple signing or Sign to Run Locally.")
         case let .unavailable(message):
             message
         }
@@ -73,7 +74,7 @@ enum SafariExtensionService {
             }
             if !didStart {
                 continuation.resume(
-                    returning: .unavailable("Safari extension state API is unavailable.")
+                    returning: .unavailable(L10n.text("Safari extension state API is unavailable."))
                 )
             }
         }

@@ -1,3 +1,4 @@
+import SmartShotCore
 import AppKit
 import CoreGraphics
 import Foundation
@@ -10,11 +11,11 @@ enum BrowserCaptureImportServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            "SmartShot received an invalid browser import URL."
+            L10n.text("SmartShot received an invalid browser import URL.")
         case .unsupportedSource:
-            "SmartShot does not recognize this browser import source."
+            L10n.text("SmartShot does not recognize this browser import source.")
         case .invalidGeometry:
-            "The browser capture dimensions are inconsistent."
+            L10n.text("The browser capture dimensions are inconsistent.")
         }
     }
 }

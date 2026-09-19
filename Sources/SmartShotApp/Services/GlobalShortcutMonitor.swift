@@ -280,7 +280,7 @@ enum TransientEscapeHotKeyRegistration: Equatable {
         case .registered:
             nil
         case .unavailable:
-            "Esc unavailable - click Cancel"
+            L10n.text("Esc unavailable - click Cancel")
         }
     }
 

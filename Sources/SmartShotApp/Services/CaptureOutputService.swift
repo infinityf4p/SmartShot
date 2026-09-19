@@ -1,3 +1,4 @@
+import SmartShotCore
 import AppKit
 import Foundation
 import UniformTypeIdentifiers
@@ -38,8 +39,8 @@ enum CaptureFilenameStyle: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .smartShotTimestamp: "SmartShot + time"
-        case .labelTimestamp: "Content + time"
+        case .smartShotTimestamp: L10n.text("SmartShot + time")
+        case .labelTimestamp: L10n.text("Content + time")
         }
     }
 }
@@ -51,9 +52,9 @@ enum CaptureOutputServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .encodingFailed:
-            "The screenshot could not be encoded in the selected format."
+            L10n.text("The screenshot could not be encoded in the selected format.")
         case .noPicturesDirectory:
-            "A default screenshot folder could not be resolved."
+            L10n.text("A default screenshot folder could not be resolved.")
         }
     }
 }

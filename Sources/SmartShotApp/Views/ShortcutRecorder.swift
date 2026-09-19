@@ -50,8 +50,8 @@ final class ShortcutRecorderButton: NSButton {
         target = self
         action = #selector(toggleRecording)
         focusRingType = .exterior
-        setAccessibilityLabel("Capture shortcut")
-        setAccessibilityHelp("Click, then press a key with at least two modifiers")
+        setAccessibilityLabel(L10n.text("Capture shortcut"))
+        setAccessibilityHelp(L10n.text("Click, then press a key with at least two modifiers"))
     }
 
     required init?(coder: NSCoder) {
@@ -91,8 +91,8 @@ final class ShortcutRecorderButton: NSButton {
                 self.onCommit?(shortcut)
             }
         }
-        title = "Type shortcut"
-        setAccessibilityValue("Recording shortcut")
+        title = L10n.text("Type shortcut")
+        setAccessibilityValue(L10n.text("Recording shortcut"))
         window?.makeFirstResponder(self)
 
         localMonitor = NSEvent.addLocalMonitorForEvents(
@@ -114,7 +114,7 @@ final class ShortcutRecorderButton: NSButton {
         guard isRecording else { return event }
         switch event.type {
         case .flagsChanged:
-            title = modifierDisplayName(for: event.modifierFlags).nilIfEmpty ?? "Type shortcut"
+            title = modifierDisplayName(for: event.modifierFlags).nilIfEmpty ?? L10n.text("Type shortcut")
             return nil
         case .keyDown:
             guard !event.isARepeat else { return nil }

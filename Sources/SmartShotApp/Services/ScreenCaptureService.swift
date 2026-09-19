@@ -16,17 +16,17 @@ enum ScreenCaptureError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            "Screen capture permission is required."
+            L10n.text("Screen capture permission is required.")
         case .noDisplay:
-            "The selected content is not on an available display."
+            L10n.text("The selected content is not on an available display.")
         case .selectionMustFitSingleDisplay:
-            "The selected area must fit entirely on one available display."
+            L10n.text("The selected area must fit entirely on one available display.")
         case .emptySelection:
-            "The selected area is empty."
+            L10n.text("The selected area is empty.")
         case .captureGeometryChanged:
-            "The selected area changed while it was being captured."
+            L10n.text("The selected area changed while it was being captured.")
         case .encodingFailed:
-            "The screenshot could not be encoded."
+            L10n.text("The screenshot could not be encoded.")
         }
     }
 }

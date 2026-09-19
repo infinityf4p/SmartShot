@@ -113,23 +113,23 @@ public enum VerticalOverlapEstimationError: Error, Equatable, LocalizedError, Se
     public var errorDescription: String? {
         switch self {
         case .invalidConfiguration:
-            "The overlap estimator configuration is invalid."
+            L10n.text("The overlap estimator configuration is invalid.")
         case let .widthMismatch(expected, actual):
-            "The current image is \(actual) pixels wide, but \(expected) pixels were expected."
+            L10n.format("The current image is %@ pixels wide, but %@ pixels were expected.", String(describing: actual), String(describing: expected))
         case let .heightMismatch(expected, actual):
-            "The current image is \(actual) pixels high, but \(expected) pixels were expected."
+            L10n.format("The current image is %@ pixels high, but %@ pixels were expected.", String(describing: actual), String(describing: expected))
         case let .fixedTopHeightOutOfRange(height):
-            "The fixed top height \(height) is outside the image body."
+            L10n.format("The fixed top height %@ is outside the image body.", String(describing: height))
         case .identicalImages:
-            "The images are identical and contain no scrolling progress."
+            L10n.text("The images are identical and contain no scrolling progress.")
         case .dimensionsOverflow:
-            "An input image is too large to inspect."
+            L10n.text("An input image is too large to inspect.")
         case let .pixelLimitExceeded(index, pixelCount, maximum):
-            "Image \(index) contains \(pixelCount) pixels, exceeding the \(maximum)-pixel limit."
+            L10n.format("Image %@ contains %@ pixels, exceeding the %@-pixel limit.", String(describing: index), String(describing: pixelCount), String(describing: maximum))
         case let .imageDecodingFailed(index):
-            "Image \(index) could not be decoded."
+            L10n.format("Image %@ could not be decoded.", String(describing: index))
         case .noReliableOverlap:
-            "No reliable vertical overlap was found."
+            L10n.text("No reliable vertical overlap was found.")
         }
     }
 }

@@ -13,19 +13,19 @@ enum SelectionOverlayStatus: Equatable {
     var message: String {
         switch self {
         case .regionSelection:
-            "Region capture"
+            L10n.text("Region capture")
         case .recordingRegionSelection:
-            "Screen recording region"
+            L10n.text("Screen recording region")
         case .manualLongSelection:
-            "Long capture region"
+            L10n.text("Long capture region")
         case .searchingForScrollArea:
-            "Looking for a supported scroll area..."
+            L10n.text("Looking for a supported scroll area...")
         case .scrollAreaReady:
-            "Click the highlighted scroll area"
+            L10n.text("Click the highlighted scroll area")
         case .checkingScrollArea:
-            "Checking the scroll area..."
+            L10n.text("Checking the scroll area...")
         case .unsupportedScrollArea:
-            "No app scroll area here. Web pages use the SmartShot extension."
+            L10n.text("No app scroll area here. Web pages use the SmartShot extension.")
         }
     }
 
@@ -165,7 +165,7 @@ final class SelectionOverlayView: NSView {
             button.font = .systemFont(ofSize: 12, weight: .medium)
             button.focusRingType = .none
             button.toolTip = mode.accessibilityHelp
-            button.setAccessibilityLabel("\(mode.title) capture")
+            button.setAccessibilityLabel(L10n.format("%@ capture", String(describing: mode.title)))
             button.setAccessibilityHelp(mode.accessibilityHelp)
             stack.addArrangedSubview(button)
             return button
@@ -196,7 +196,7 @@ final class SelectionOverlayView: NSView {
             button.state = isSelected ? .on : .off
             button.contentTintColor = isSelected ? .controlAccentColor : .labelColor
         }
-        setAccessibilityValue("\(captureMode.title) capture")
+        setAccessibilityValue(L10n.format("%@ capture", String(describing: captureMode.title)))
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -275,7 +275,7 @@ final class SelectionOverlayView: NSView {
     }
 
     private func drawBadge(for selection: CGRect) {
-        let label = manualRect == nil ? (candidate?.label ?? "Selection") : "Manual"
+        let label = manualRect == nil ? (candidate?.label ?? L10n.text("Selection")) : L10n.text("Manual")
         let sizeText = "\(Int(selection.width)) x \(Int(selection.height))"
         let text = "\(label)  \(sizeText)" as NSString
         let paragraphStyle = NSMutableParagraphStyle()

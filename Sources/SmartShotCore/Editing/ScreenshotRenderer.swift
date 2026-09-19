@@ -13,17 +13,17 @@ public enum ScreenshotRenderingError: Error, Equatable, LocalizedError, Sendable
     public var errorDescription: String? {
         switch self {
         case .invalidImage:
-            "The screenshot image is invalid."
+            L10n.text("The screenshot image is invalid.")
         case .invalidLogicalSize:
-            "The screenshot size is invalid."
+            L10n.text("The screenshot size is invalid.")
         case .emptyCrop:
-            "The crop area is empty."
+            L10n.text("The crop area is empty.")
         case .outputTooLarge:
-            "The edited screenshot is too large to render safely."
+            L10n.text("The edited screenshot is too large to render safely.")
         case .contextCreationFailed:
-            "The screenshot editor could not create a drawing surface."
+            L10n.text("The screenshot editor could not create a drawing surface.")
         case .imageCreationFailed:
-            "The screenshot editor could not create the edited image."
+            L10n.text("The screenshot editor could not create the edited image.")
         }
     }
 }

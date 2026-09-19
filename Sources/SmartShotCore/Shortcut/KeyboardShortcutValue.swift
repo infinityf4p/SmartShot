@@ -97,15 +97,15 @@ public enum KeyboardShortcutValidationError: Error, LocalizedError, Equatable, S
     public var errorDescription: String? {
         switch self {
         case let .unsupportedSchemaVersion(version):
-            "Shortcut data version \(version) is not supported."
+            L10n.format("Shortcut data version %@ is not supported.", String(describing: version))
         case .insufficientModifiers:
-            "Use at least two of Command, Option, Control, or Shift."
+            L10n.text("Use at least two of Command, Option, Control, or Shift.")
         case .escapeNotAllowed:
-            "Escape cannot be used as a global shortcut."
+            L10n.text("Escape cannot be used as a global shortcut.")
         case let .unsupportedKeyCode(keyCode):
-            "Key code \(keyCode) is not supported."
+            L10n.format("Key code %@ is not supported.", String(describing: keyCode))
         case .dangerousSystemShortcut:
-            "That shortcut is reserved for a common macOS window or application command."
+            L10n.text("That shortcut is reserved for a common macOS window or application command.")
         }
     }
 }

@@ -104,35 +104,35 @@ public enum VerticalImageStitchingError: Error, Equatable, LocalizedError, Senda
     public var errorDescription: String? {
         switch self {
         case .noFragments:
-            "At least one image fragment is required."
+            L10n.text("At least one image fragment is required.")
         case .invalidMaximumPixelCount:
-            "The maximum pixel count must be greater than zero."
+            L10n.text("The maximum pixel count must be greater than zero.")
         case let .invalidScale(index):
-            "Fragment \(index) has an invalid image scale."
+            L10n.format("Fragment %@ has an invalid image scale.", String(describing: index))
         case let .scaleMismatch(index, expected, actual):
-            "Fragment \(index) uses scale \(actual), but scale \(expected) was expected."
+            L10n.format("Fragment %@ uses scale %@, but scale %@ was expected.", String(describing: index), String(describing: actual), String(describing: expected))
         case let .invalidVerticalOffset(index):
-            "Fragment \(index) has an invalid vertical offset."
+            L10n.format("Fragment %@ has an invalid vertical offset.", String(describing: index))
         case let .offsetsOutOfOrder(index):
-            "Fragment \(index) is positioned before the preceding fragment."
+            L10n.format("Fragment %@ is positioned before the preceding fragment.", String(describing: index))
         case let .invalidSourceInsets(index):
-            "Fragment \(index) has invalid source insets."
+            L10n.format("Fragment %@ has invalid source insets.", String(describing: index))
         case let .widthMismatch(index, expected, actual):
-            "Fragment \(index) is \(actual) pixels wide, but \(expected) pixels were expected."
+            L10n.format("Fragment %@ is %@ pixels wide, but %@ pixels were expected.", String(describing: index), String(describing: actual), String(describing: expected))
         case let .gap(index, expected, actual):
-            "Fragment \(index) starts at pixel \(actual), leaving a gap after pixel \(expected)."
+            L10n.format("Fragment %@ starts at pixel %@, leaving a gap after pixel %@.", String(describing: index), String(describing: actual), String(describing: expected))
         case let .fragmentAddsNoPixels(index):
-            "Fragment \(index) adds no new pixels."
+            L10n.format("Fragment %@ adds no new pixels.", String(describing: index))
         case .dimensionsOverflow:
-            "The stitched image dimensions are too large."
+            L10n.text("The stitched image dimensions are too large.")
         case let .pixelLimitExceeded(pixelCount, maximum):
-            "The stitched image requires \(pixelCount) pixels, exceeding the \(maximum)-pixel limit."
+            L10n.format("The stitched image requires %@ pixels, exceeding the %@-pixel limit.", String(describing: pixelCount), String(describing: maximum))
         case let .imageDecodingFailed(index):
-            "Fragment \(index) could not be decoded."
+            L10n.format("Fragment %@ could not be decoded.", String(describing: index))
         case .imageCreationFailed:
-            "The stitched image could not be created."
+            L10n.text("The stitched image could not be created.")
         case .pngEncodingFailed:
-            "The stitched image could not be encoded as PNG."
+            L10n.text("The stitched image could not be encoded as PNG.")
         }
     }
 }

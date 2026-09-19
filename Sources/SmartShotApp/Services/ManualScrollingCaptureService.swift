@@ -13,15 +13,15 @@ enum ManualScrollingCaptureError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .timedOut:
-            "Manual long capture reached the 5-minute session limit. Finish sooner or start a new capture."
+            L10n.text("Manual long capture reached the 5-minute session limit. Finish sooner or start a new capture.")
         case .frameLimitReached:
-            "This long capture needs more than 24 sections. Try a shorter region."
+            L10n.text("This long capture needs more than 24 sections. Try a shorter region.")
         case .outputTooLarge:
-            "The completed long image would exceed SmartShot's safe size limit."
+            L10n.text("The completed long image would exceed SmartShot's safe size limit.")
         case .contentDidNotMove:
-            "Scroll the selected content down at least once before finishing."
+            L10n.text("Scroll the selected content down at least once before finishing.")
         case .unreliableOverlap:
-            "SmartShot could not verify a clean overlap. Scroll downward in smaller steps and pause after each step."
+            L10n.text("SmartShot could not verify a clean overlap. Scroll downward in smaller steps and pause after each step.")
         }
     }
 }
@@ -65,7 +65,7 @@ struct ManualScrollingCaptureProgress: Equatable, Sendable {
     var remainingTimeText: String? {
         guard let secondsRemaining else { return nil }
         let clamped = max(0, secondsRemaining)
-        return String(format: "%d:%02d left", clamped / 60, clamped % 60)
+        return String(format: L10n.text("%d:%02d left"), clamped / 60, clamped % 60)
     }
 }
 

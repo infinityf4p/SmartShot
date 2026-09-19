@@ -76,7 +76,7 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
             let view = SelectionOverlayView(frame: CGRect(origin: .zero, size: screen.frame.size))
             view.setAccessibilityElement(true)
             view.setAccessibilityRole(.group)
-            view.setAccessibilityLabel("SmartShot selection overlay")
+            view.setAccessibilityLabel(L10n.text("SmartShot selection overlay"))
             view.delegate = self
             view.screenFrame = screen.frame
             configure(view, for: mode)
@@ -457,8 +457,8 @@ final class SelectionOverlayController: NSObject, SelectionOverlayViewDelegate {
     private func failUnsupportedScrollingSelection() {
         tearDown()
         let message = AXIsProcessTrusted()
-            ? "No controllable app scroll area was found here. For X and other webpages, use the SmartShot browser extension from the browser toolbar."
-            : "Allow Accessibility access to select and control an app scroll area."
+            ? L10n.text("No controllable app scroll area was found here. For X and other webpages, use the SmartShot browser extension from the browser toolbar.")
+            : L10n.text("Allow Accessibility access to select and control an app scroll area.")
         delegate?.selectionOverlay(
             self,
             didFailWith: message
@@ -576,7 +576,7 @@ private final class SelectionOverlayPanel: NSPanel {
         isReleasedWhenClosed = false
         setAccessibilityElement(true)
         setAccessibilityRole(.window)
-        setAccessibilityLabel("SmartShot selection overlay")
+        setAccessibilityLabel(L10n.text("SmartShot selection overlay"))
     }
 
     override var canBecomeKey: Bool { true }

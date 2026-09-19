@@ -1,3 +1,4 @@
+import SmartShotCore
 import Foundation
 
 enum CaptureSelectionMode: String, CaseIterable, Equatable, Sendable {
@@ -8,10 +9,10 @@ enum CaptureSelectionMode: String, CaseIterable, Equatable, Sendable {
 
     var title: String {
         switch self {
-        case .smart: "Smart"
-        case .region: "Region"
-        case .long: "Long"
-        case .appScroll: "App Scroll"
+        case .smart: L10n.text("Smart")
+        case .region: L10n.text("Region")
+        case .long: L10n.text("Long")
+        case .appScroll: L10n.text("App Scroll")
         }
     }
 
@@ -26,10 +27,10 @@ enum CaptureSelectionMode: String, CaseIterable, Equatable, Sendable {
 
     var accessibilityHelp: String {
         switch self {
-        case .smart: "Select a detected content block or drag a region"
-        case .region: "Drag a rectangular screenshot region"
-        case .long: "Drag a fixed region, then scroll its content"
-        case .appScroll: "Select an app scroll area for automatic capture"
+        case .smart: L10n.text("Select a detected content block or drag a region")
+        case .region: L10n.text("Drag a rectangular screenshot region")
+        case .long: L10n.text("Drag a fixed region, then scroll its content")
+        case .appScroll: L10n.text("Select an app scroll area for automatic capture")
         }
     }
 }

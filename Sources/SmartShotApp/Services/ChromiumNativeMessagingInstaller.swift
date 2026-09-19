@@ -1,3 +1,4 @@
+import SmartShotCore
 import Foundation
 
 struct ChromiumNativeMessagingStatus: Equatable, Sendable {
@@ -24,15 +25,15 @@ enum ChromiumNativeMessagingInstallerError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .applicationNotInstalled:
-            "Move SmartShot to /Applications before installing the browser connector."
+            L10n.text("Move SmartShot to /Applications before installing the browser connector.")
         case .helperUnavailable:
-            "The SmartShot browser connector is missing from the app bundle."
+            L10n.text("The SmartShot browser connector is missing from the app bundle.")
         case .noSupportedBrowser:
-            "No supported Chromium browser was detected."
+            L10n.text("No supported Chromium browser was detected.")
         case .manifestEncodingFailed:
-            "SmartShot could not prepare the browser connector manifest."
+            L10n.text("SmartShot could not prepare the browser connector manifest.")
         case let .browserWritesFailed(names):
-            "The connector could not be installed for: \(names.joined(separator: ", "))."
+            L10n.format("The connector could not be installed for: %@.", String(describing: names.joined(separator: ", ")))
         }
     }
 }
