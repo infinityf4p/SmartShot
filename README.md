@@ -10,7 +10,7 @@ SmartShot combines smart block selection, region and long screenshots, an image 
 
 macOS 14+ · Swift 6 · Preview releases
 
-![SmartShot main window (v0.2.5)](Docs/Images/main-window.jpg)
+![SmartShot main window](Docs/Images/main-window.jpg)
 
 ## Features
 
@@ -34,45 +34,32 @@ macOS 14+ · Swift 6 · Preview releases
 - Browser extension ZIP: `SmartShot-Web-Selector-<version>.zip`
 - SHA-256 checksums: `SHA256SUMS.txt`
 
-This preview is ad-hoc signed, without a Developer ID certificate or Apple notarization. macOS may block a downloaded copy until you explicitly approve it in Finder or Privacy & Security. The packaged app has no `get-task-allow` debugging entitlement. Safari development enablement and the pending acceptance cases below still apply.
+This preview is ad-hoc signed, without a Developer ID certificate or Apple notarization. macOS may block a downloaded copy until you explicitly approve it in Finder or Privacy & Security. The packaged app has no `get-task-allow` debugging entitlement.
 
 ## Get Started
 
-1. Download the DMG or ZIP, place `SmartShot.app` in `/Applications`, and launch it. Alternatively, build from source below.
-2. Allow **Screen Recording** for screenshots and video. **Accessibility** enables smart content-block selection; manual regions remain available without it. Microphone access is separate and optional.
-3. Use **Capture** or the shortcut displayed in the app. Choose **Smart**, **Region**, **Long**, or **App Scroll**; press Escape to cancel.
-4. Edit the result, then Copy, Pin, or Save. **Save** writes directly to the configured folder; its adjacent arrow opens the save dialog. Use the close button to return to the initial view. For video, choose **More > Record Region** or **Record Current Display**. Stop saves an MP4; Cancel discards the recording.
+1. Move `SmartShot.app` to `/Applications`, launch it, and allow **Screen Recording**. **Accessibility** enables smart block selection; microphone access is optional.
+2. Click **Capture** or press `Control-Shift-2` (configurable in Settings), then choose a capture mode. Press Escape to cancel.
+3. Edit, Copy, Pin, or Save. **Save** writes to your chosen folder; its arrow opens the save dialog. Close the screenshot to return home. Record through **More > Record Region / Record Current Display**.
 
-The initial native shortcut is `Control-Shift-2`. If it conflicts with another app, use the shortcut shown in SmartShot or change it in Settings.
-
-The app starts in English by default. Choose **Settings > General > Language > 简体中文** for Simplified Chinese, then quit and reopen SmartShot. The language choice is saved; choosing **English** switches back after a restart.
+English is the default. Choose **Settings > General > Language > 简体中文** and restart to switch to Chinese; the selection is saved.
 
 ## Build Locally
 
-Requirements: macOS 14+, Xcode with Swift 6 support, [XcodeGen](https://github.com/yonaskolb/XcodeGen), and Node.js for browser tests. The current checkout has been tested on Apple Silicon with Xcode 26.6.
+Requires macOS 14+, Xcode with Swift 6, and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```sh
 git clone https://github.com/infinityf4p/SmartShot.git
 cd SmartShot
 xcodegen generate
-
 xcodebuild -project SmartShot.xcodeproj -scheme SmartShot \
   -configuration Release -derivedDataPath DerivedData \
   build CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
   CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
-
 open DerivedData/Build/Products/Release/SmartShot.app
 ```
 
-This command overrides the project's local signing identity with ad-hoc signing, so it does not require a Keychain signing certificate. It builds a local app with the same signing limitations as the preview download, not a Developer ID signed or notarized release. Different signatures can require new macOS permissions.
-
-For Safari extension development, use the dedicated isolated build instead:
-
-```sh
-Scripts/build_safari_development.sh
-```
-
-The script verifies universal binaries and nested signatures, prints the app path, and leaves the existing `/Applications/SmartShot.app` untouched. Its debugging entitlements are for development only; do not distribute that artifact. See [Safari development setup](Docs/SAFARI_DEVELOPMENT_BUILD.md).
+This uses ad-hoc signing without a signing certificate; macOS may require new permissions. For Safari extension development, see [Safari development builds](Docs/SAFARI_DEVELOPMENT_BUILD.md).
 
 ## Browser Extension
 
@@ -89,31 +76,6 @@ The extension selects one webpage content block and produces a PNG. It captures 
 Safari requires a compatible Apple development signature or the dedicated **Sign to Run Locally** build. The latter requires **Settings > Developer > Allow unsigned extensions**, extension enablement, and Website Access; Safari resets the unsigned override when it quits. A normal ad-hoc or custom self-signed build is not sufficient on its own. Safari capture/import is still awaiting full runtime acceptance.
 
 See the [extension guide](BrowserExtension/README.md) for installation, permissions, capture bounds, and native messaging details.
-
-## Current Verification
-
-The full automated suites were rerun on **2026-09-14**:
-
-| Suite | Result |
-| --- | --- |
-| Native Swift tests | 205 passed, 0 failed, 0 skipped |
-| Browser extension tests | 114 passed, 0 failed, 0 skipped |
-
-Recorded runtime checks include controlled Chrome visible/long capture with native preview, OCR and sensitive-text redaction, history search, private-history suppression, pinning, editor refresh/crop/move/delete, PNG/JPEG output, system-audio recording, GIF export, and recording cancellation. These observations cover specific scenarios, not every supported configuration.
-
-Still pending: the complete editor/output/privacy matrix, actual microphone recording, A/V sync, Safari capture/import, current public X compatibility, mixed displays/full-screen Spaces, and sustained recording/failure recovery. See the [test plan](Docs/TEST_PLAN.md) and runtime records for [September 5](Docs/ACCEPTANCE_2026-09-05.md) and [September 6](Docs/ACCEPTANCE_2026-09-06.md).
-
-To run the tests:
-
-```sh
-xcodebuild -project SmartShot.xcodeproj -scheme SmartShot \
-  -configuration Debug -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath DerivedData test CODE_SIGNING_ALLOWED=NO
-
-npm --prefix BrowserExtension test
-```
-
-The destination above targets Apple Silicon. Use the appropriate macOS architecture on an Intel Mac. Automated tests do not exercise real permissions or prove browser installation.
 
 ## Scope and Privacy
 

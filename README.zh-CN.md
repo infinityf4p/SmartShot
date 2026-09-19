@@ -10,7 +10,7 @@ SmartShot 将智能选区、区域截图、长截图、图片编辑、本地 OCR
 
 macOS 14+ · Swift 6 · 预览版
 
-![SmartShot 主界面（v0.2.5）](Docs/Images/main-window.jpg)
+![SmartShot 主界面](Docs/Images/main-window.jpg)
 
 ## 功能
 
@@ -34,45 +34,32 @@ macOS 14+ · Swift 6 · 预览版
 - 浏览器扩展 ZIP：`SmartShot-Web-Selector-<version>.zip`
 - SHA-256 校验文件：`SHA256SUMS.txt`
 
-该预览版使用 ad-hoc 签名，没有 Developer ID 证书或 Apple 公证。macOS 可能会阻止下载的应用，需要你在 Finder 或“隐私与安全性”中明确允许打开。安装包不含 `get-task-allow` 调试权限；Safari 开发启用条件及下方待验收范围仍然适用。
+该预览版使用 ad-hoc 签名，没有 Developer ID 证书或 Apple 公证。macOS 可能会阻止下载的应用，需要你在 Finder 或“隐私与安全性”中明确允许打开。安装包不含 `get-task-allow` 调试权限。
 
 ## 开始使用
 
-1. 下载 DMG 或 ZIP，将 `SmartShot.app` 放入 `/Applications` 后启动；也可以按下方说明从源码构建。
-2. 截图与录屏需要 **屏幕录制** 权限。**辅助功能** 权限用于智能内容块选择；没有该权限时仍可手动框选。麦克风权限独立且可选。
-3. 点击 **Capture**，或使用应用中显示的快捷键。选择 **Smart**、**Region**、**Long** 或 **App Scroll**，按 Escape 取消。
-4. 编辑截图后选择 Copy、Pin 或 Save。**Save** 直接保存到配置的文件夹，右侧箭头打开保存弹窗；关闭按钮返回初始界面。录屏入口为 **More > Record Region** 或 **Record Current Display**；Stop 保存 MP4，Cancel 丢弃本次录制。
+1. 将 `SmartShot.app` 放入 `/Applications`，启动后允许 **屏幕录制**；**辅助功能**用于智能选区，麦克风权限可选。
+2. 点击 **Capture（截图）**，或按 `Control-Shift-2`（可在设置中修改），再选择截图模式；按 Escape 取消。
+3. 编辑后复制、贴图或保存。**Save（保存）**直接写入指定文件夹，旁边箭头打开保存弹窗；关闭截图返回主界面。录屏入口为 **More（更多）> Record Region / Record Current Display**。
 
-原生截图的初始快捷键为 `Control-Shift-2`。如果与其他应用冲突，以 SmartShot 显示的快捷键为准，也可以在 Settings 中修改。
-
-应用默认使用英文。在 **Settings > General > Language** 中选择 **简体中文**，退出并重新打开 SmartShot 后生效。语言选择会保存；切回英文时，在 **设置 > 通用 > 语言** 中选择 **English**，然后重启应用。
+默认使用英文。在 **Settings > General > Language** 中选择 **简体中文**，重启后生效，选择会保存。
 
 ## 本地构建
 
-需要 macOS 14+、支持 Swift 6 的 Xcode、[XcodeGen](https://github.com/yonaskolb/XcodeGen)，以及用于浏览器测试的 Node.js。当前代码已在 Apple Silicon 和 Xcode 26.6 环境下测试。
+需要 macOS 14+、支持 Swift 6 的 Xcode 和 [XcodeGen](https://github.com/yonaskolb/XcodeGen)。
 
 ```sh
 git clone https://github.com/infinityf4p/SmartShot.git
 cd SmartShot
 xcodegen generate
-
 xcodebuild -project SmartShot.xcodeproj -scheme SmartShot \
   -configuration Release -derivedDataPath DerivedData \
   build CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
   CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
-
 open DerivedData/Build/Products/Release/SmartShot.app
 ```
 
-上述命令用 ad-hoc 签名覆盖项目中的本地签名身份，**不需要 Keychain 签名证书**。生成的本地应用与预览版下载具有相同的签名限制，并非经过 Developer ID 签名或公证的发行版；签名变化后，macOS 可能要求重新授权。
-
-Safari 扩展开发请改用独立构建脚本：
-
-```sh
-Scripts/build_safari_development.sh
-```
-
-脚本会校验通用二进制及嵌套签名、打印应用路径，并保留现有 `/Applications/SmartShot.app`。该构建带有仅供开发的调试权限，不应分发。详见 [Safari 开发构建说明](Docs/SAFARI_DEVELOPMENT_BUILD.md)。
+上述命令使用 ad-hoc 签名，无需签名证书；macOS 可能要求重新授权。Safari 扩展开发见 [专用构建说明](Docs/SAFARI_DEVELOPMENT_BUILD.md)。
 
 ## 浏览器扩展
 
@@ -89,31 +76,6 @@ Scripts/build_safari_development.sh
 Safari 需要兼容的 Apple 开发签名，或专用的 **Sign to Run Locally** 构建。后者需要开启 **Settings > Developer > Allow unsigned extensions**，启用扩展并授予网站访问权限；Safari 退出后会重置未签名扩展开关。普通 ad-hoc 或自定义自签名构建本身不足以完成 Safari 扩展安装。目前 Safari 截图与导入仍待完整实机验收。
 
 安装、权限、截图限制和原生通信细节见 [浏览器扩展说明](BrowserExtension/README.md)。
-
-## 验证状态
-
-**2026-09-14** 重新运行了完整自动化测试：
-
-| 测试 | 结果 |
-| --- | --- |
-| 原生 Swift 测试 | 205 通过，0 失败，0 跳过 |
-| 浏览器扩展测试 | 114 通过，0 失败，0 跳过 |
-
-已记录的实机检查包括：受控 Chrome 页面可见区域与长截图导入原生预览、OCR 与敏感文字遮挡、历史搜索、私密截图不写历史、置顶贴图、编辑器刷新及裁剪/移动/删除、PNG/JPEG 输出、系统声音录屏、GIF 导出和取消录制。这些结果只覆盖各自记录的场景。
-
-仍待验收：完整编辑/输出/隐私流程、麦克风实际录制、音画同步、Safari 截图与导入、当前公开 X 网站兼容性、混合显示器与全屏空间，以及长时间录制和故障恢复。详见 [测试计划](Docs/TEST_PLAN.md) 与 [9 月 5 日](Docs/ACCEPTANCE_2026-09-05.md)、[9 月 6 日](Docs/ACCEPTANCE_2026-09-06.md)实机记录。
-
-运行测试：
-
-```sh
-xcodebuild -project SmartShot.xcodeproj -scheme SmartShot \
-  -configuration Debug -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath DerivedData test CODE_SIGNING_ALLOWED=NO
-
-npm --prefix BrowserExtension test
-```
-
-上述测试目标适用于 Apple Silicon；Intel Mac 请使用对应的 macOS 架构。自动化测试不操作真实权限，也不能证明浏览器扩展已正确安装。
 
 ## 范围与隐私
 

@@ -1,3 +1,4 @@
+import AppKit
 import SmartShotCore
 import SwiftUI
 
@@ -34,6 +35,9 @@ struct SmartShotApp: App {
         }
         .windowResizability(.contentMinSize)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button(L10n.text("About SmartShot"), action: showAboutPanel)
+            }
             CommandGroup(after: .newItem) {
                 Button(L10n.text("Capture")) { model.startCapture(origin: .mainWindow) }
                 Button(L10n.text("Automatic App Scroll (Experimental)")) {
@@ -76,6 +80,21 @@ struct SmartShotApp: App {
             MenuBarContent(model: model)
                 .environment(\.locale, AppLanguage.current.locale)
         }
+    }
+
+    private func showAboutPanel() {
+        let repositoryURL = "https://github.com/infinityf4p/SmartShot"
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        let credits = NSAttributedString(
+            string: repositoryURL,
+            attributes: [
+                .link: repositoryURL,
+                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                .paragraphStyle: paragraphStyle
+            ]
+        )
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 }
 
