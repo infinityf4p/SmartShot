@@ -40,7 +40,7 @@ macOS 14+ · Swift 6 · 预览版
 
 1. 将 `SmartShot.app` 放入 `/Applications`，启动后允许 **屏幕录制**；**辅助功能**用于智能选区，麦克风权限可选。
 2. 点击 **Capture（截图）**，或按 `Control-Shift-2`（可在设置中修改），再选择截图模式；按 Escape 取消。
-3. 编辑后复制、贴图或保存。**Save（保存）**直接写入指定文件夹，旁边箭头打开保存弹窗；关闭截图返回主界面。录屏入口为 **More（更多）> Record Region / Record Current Display**。
+3. 编辑后复制、贴图或保存。**Save（保存）**直接写入指定文件夹，旁边箭头打开保存弹窗；关闭截图返回主界面。录屏入口为 **Record（录屏）> Record Region / Record Current Display**。
 
 默认使用英文。在 **Settings > General > Language** 中选择 **简体中文**，重启后生效，选择会保存。
 

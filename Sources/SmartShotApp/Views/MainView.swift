@@ -69,7 +69,13 @@ struct MainView: View {
                         } label: {
                             Label(L10n.text("Record Current Display"), systemImage: "display")
                         }
-                        Divider()
+                    } label: {
+                        Label(L10n.text("Record"), systemImage: "record.circle")
+                    }
+                    .disabled(model.isBusy)
+                    .help(L10n.text("Record a region or the current display"))
+
+                    Menu {
                         Button {
                             model.startScrollingCapture(origin: .mainWindow)
                         } label: {
@@ -79,6 +85,7 @@ struct MainView: View {
                         Label(L10n.text("More"), systemImage: "ellipsis.circle")
                     }
                     .disabled(model.isBusy)
+                    .help(L10n.text("Automatic App Scroll (Experimental)"))
                 }
             }
         }

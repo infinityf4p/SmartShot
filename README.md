@@ -40,7 +40,7 @@ This preview is ad-hoc signed, without a Developer ID certificate or Apple notar
 
 1. Move `SmartShot.app` to `/Applications`, launch it, and allow **Screen Recording**. **Accessibility** enables smart block selection; microphone access is optional.
 2. Click **Capture** or press `Control-Shift-2` (configurable in Settings), then choose a capture mode. Press Escape to cancel.
-3. Edit, Copy, Pin, or Save. **Save** writes to your chosen folder; its arrow opens the save dialog. Close the screenshot to return home. Record through **More > Record Region / Record Current Display**.
+3. Edit, Copy, Pin, or Save. **Save** writes to your chosen folder; its arrow opens the save dialog. Close the screenshot to return home. Record through **Record > Record Region / Record Current Display**.
 
 English is the default. Choose **Settings > General > Language > 简体中文** and restart to switch to Chinese; the selection is saved.
 

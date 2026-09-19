@@ -233,6 +233,7 @@
 "Record" = "录屏";
 "Record Current Display" = "录制当前屏幕";
 "Record Region" = "区域录屏";
+"Record a region or the current display" = "录制选定区域或当前屏幕";
 "Recording duration" = "录屏时长";
 "Recording remains in temporary storage. Use Save As to keep it." = "录屏仍保存在临时位置，请使用“另存为”保留文件。";
 "Recording screen" = "正在录屏";
